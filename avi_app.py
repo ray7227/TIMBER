@@ -12,7 +12,7 @@ import re
 # --- Load TDA tables ---
 @st.cache_data
 def load_tda(region):
-    path = f"C:/Users/rray/OneDrive - Aim Land Services Ltd/Desktop/{region.upper()}_TDA.xlsx"
+    path = f"{region.upper()}_TDA.xlsx"  # Looks for file in same directory as avi_app.py
     return pd.read_excel(path)
 
 # --- Species mapping & choices ---
