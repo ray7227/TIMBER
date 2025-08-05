@@ -97,6 +97,13 @@ if st.session_state.reset_trigger:
     st.session_state.dom_species = species_choices[0].split(" ")[0]
     st.session_state.sec_species = ""
     st.session_state.avg_stand_height = 0
+    # Reset all widget-related session state keys
+    st.session_state.is_merch = default_values["is_merch"]
+    st.session_state.crown_density = default_values["crown_density"]
+    st.session_state.dom_sel = default_values["dom_sel"]
+    st.session_state.sec_sel = default_values["sec_sel"]
+    st.session_state.area = default_values["area"]
+    st.session_state.region = default_values["region"]
     st.session_state.reset_trigger = False
     st.rerun()
 
@@ -770,11 +777,18 @@ if st.button("Reset All Entries"):
     st.session_state.show_salvage_form = False
     st.session_state.current_entry_index = -1
     st.session_state.edit_mode = False
-    st.session_state.reset_trigger = True
     st.session_state.dom_cover = 70
     st.session_state.sec_cover = 30
     st.session_state.dom_species = species_choices[0].split(" ")[0]
     st.session_state.sec_species = ""
     st.session_state.avg_stand_height = 0
+    # Reset all widget-related session state keys
+    st.session_state.is_merch = default_values["is_merch"]
+    st.session_state.crown_density = default_values["crown_density"]
+    st.session_state.dom_sel = default_values["dom_sel"]
+    st.session_state.sec_sel = default_values["sec_sel"]
+    st.session_state.area = default_values["area"]
+    st.session_state.region = default_values["region"]
+    st.session_state.reset_trigger = False
     st.success("All saved entries and input fields cleared.")
     st.rerun()
