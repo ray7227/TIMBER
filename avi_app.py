@@ -60,6 +60,8 @@ if 'dom_species' not in st.session_state:
     st.session_state.dom_species = species_choices[0].split(" ")[0]
 if 'sec_species' not in st.session_state:
     st.session_state.sec_species = ""
+if 'avg_stand_height' not in st.session_state:
+    st.session_state.avg_stand_height = 0
 
 # --- Reset widget defaults if triggered ---
 default_values = {
@@ -94,6 +96,7 @@ if st.session_state.reset_trigger:
     st.session_state.sec_cover = 30
     st.session_state.dom_species = species_choices[0].split(" ")[0]
     st.session_state.sec_species = ""
+    st.session_state.avg_stand_height = 0
     st.session_state.reset_trigger = False
     st.rerun()
 
@@ -189,6 +192,8 @@ with col_nav2:
         # Recalculate derived species and volumes before saving
         dom_species = st.session_state.dom_sel.split(" ")[0] if st.session_state.dom_sel else ""
         sec_species = st.session_state.sec_sel.split(" ")[0] if st.session_state.sec_sel else ""
+        # Update avg_stand_height in session state
+        st.session_state.avg_stand_height = st.session_state.get("avg_stand_height", default_values["avg_stand_height"])
         # Calculate volumes and loads for the current entry
         calculate_avi_and_volumes(
             st.session_state.is_merch,
@@ -770,5 +775,6 @@ if st.button("Reset All Entries"):
     st.session_state.sec_cover = 30
     st.session_state.dom_species = species_choices[0].split(" ")[0]
     st.session_state.sec_species = ""
+    st.session_state.avg_stand_height = 0
     st.success("All saved entries and input fields cleared.")
     st.rerun()
