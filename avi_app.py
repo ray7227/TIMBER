@@ -240,15 +240,9 @@ with col_nav2:
             st.session_state.results_log.append(entry_data)
             st.success("New entry saved!")
 
-        # Reset to new entry state
+        # Transition to new entry without resetting input fields
         st.session_state.current_entry_index = -1
         st.session_state.edit_mode = False
-        for key, value in default_values.items():
-            st.session_state[key] = value
-        st.session_state.dom_cover = 70
-        st.session_state.sec_cover = 30
-        st.session_state.dom_species = species_choices[0].split(" ")[0]
-        st.session_state.sec_species = ""
         st.rerun()
 with col_nav3:
     st.write(f"Entries Saved: {len(st.session_state.results_log)}")
