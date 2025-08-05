@@ -34,36 +34,7 @@ species_choices = [f"{code} ({species_names[code]})" for code in species_codes]
 conifers = {"Sw", "Sb", "P", "Fb", "Fd", "Lt"}
 deciduous = {"Aw", "Pb", "Bw"}
 
-# --- Page config ---
-st.set_page_config(layout="wide")
-st.header(
-    "🌲 TIMBER: AVI/TDA/Report Generator",
-    help="Before using this form:\n\n1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n2. Use P3 satellite imagery to divide the footprint into tree stand sections and calculate the area of each polygon\n3. Identify the site LSD, locate the corresponding P3 map, and georeference it to the area using ground control points (GCPs) tied to township corners, then rectify the map\n\nFor this form:\n\nComplete the form step by step for each tree stand. Copy the values from the white boxes on the right into the ArcMap table, and enter \"Y\" if merchantable timber is present. After each stand, click “Save Entry” to save and move to a new entry. Once all stands are complete, click “Finish (Show Totals)” to calculate totals, then “Finish (Fill Salvage Draft)” to populate the final Timber form."
-)
-
-# --- Session state initialization ---
-if 'results_log' not in st.session_state:
-    st.session_state.results_log = []
-if 'current_entry_index' not in st.session_state:
-    st.session_state.current_entry_index = -1  # -1 means new entry
-if 'edit_mode' not in st.session_state:
-    st.session_state.edit_mode = False
-if 'show_salvage_form' not in st.session_state:
-    st.session_state.show_salvage_form = False
-if 'reset_trigger' not in st.session_state:
-    st.session_state.reset_trigger = False
-if 'dom_cover' not in st.session_state:
-    st.session_state.dom_cover = 70
-if 'sec_cover' not in st.session_state:
-    st.session_state.sec_cover = 30
-if 'dom_species' not in st.session_state:
-    st.session_state.dom_species = species_choices[0].split(" ")[0]
-if 'sec_species' not in st.session_state:
-    st.session_state.sec_species = ""
-if 'avg_stand_height' not in st.session_state:
-    st.session_state.avg_stand_height = 0
-
-# --- Reset widget defaults if triggered ---
+# --- Default values ---
 default_values = {
     "is_merch": "Yes",
     "crown_density": 70,
@@ -85,27 +56,68 @@ default_values = {
     "justification": ""
 }
 
-# Apply reset if triggered
+# --- Session state initialization ---
+if 'results_log' not in st.session_state:
+    st.session_state.results_log = []
+if 'current_entry_index' not in st.session_state:
+    st.session_state.current_entry_index = -1  # -1 means new entry
+if 'edit_mode' not in st.session_state:
+    st.session_state.edit_mode = False
+if 'show_salvage_form' not in st.session_state:
+    st.session_state.show_salvage_form = False
+if 'reset_trigger' not in st.session_state:
+    st.session_state.reset_trigger = False
+if 'dom_cover' not in st.session_state:
+    st.session_state.dom_cover = default_values["dom_cover"]
+if 'sec_cover' not in st.session_state:
+    st.session_state.sec_cover = default_values["sec_cover"]
+if 'dom_species' not in st.session_state:
+    st.session_state.dom_species = species_choices[0].split(" ")[0]
+if 'sec_species' not in st.session_state:
+    st.session_state.sec_species = ""
+if 'avg_stand_height' not in st.session_state:
+    st.session_state.avg_stand_height = default_values["avg_stand_height"]
+if 'is_merch' not in st.session_state:
+    st.session_state.is_merch = default_values["is_merch"]
+if 'crown_density' not in st.session_state:
+    st.session_state.crown_density = default_values["crown_density"]
+if 'dom_sel' not in st.session_state:
+    st.session_state.dom_sel = default_values["dom_sel"]
+if 'sec_sel' not in st.session_state:
+    st.session_state.sec_sel = default_values["sec_sel"]
+if 'area' not in st.session_state:
+    st.session_state.area = default_values["area"]
+if 'region' not in st.session_state:
+    st.session_state.region = default_values["region"]
+
+# --- Reset widget defaults if triggered ---
 if st.session_state.reset_trigger:
     # Clear session state for non-widget keys
     st.session_state.results_log = []
     st.session_state.current_entry_index = -1
     st.session_state.edit_mode = False
     st.session_state.show_salvage_form = False
-    st.session_state.dom_cover = 70
-    st.session_state.sec_cover = 30
+    st.session_state.dom_cover = default_values["dom_cover"]
+    st.session_state.sec_cover = default_values["sec_cover"]
     st.session_state.dom_species = species_choices[0].split(" ")[0]
     st.session_state.sec_species = ""
-    st.session_state.avg_stand_height = 0
     # Reset all widget-related session state keys
     st.session_state.is_merch = default_values["is_merch"]
     st.session_state.crown_density = default_values["crown_density"]
+    st.session_state.avg_stand_height = default_values["avg_stand_height"]
     st.session_state.dom_sel = default_values["dom_sel"]
     st.session_state.sec_sel = default_values["sec_sel"]
     st.session_state.area = default_values["area"]
     st.session_state.region = default_values["region"]
     st.session_state.reset_trigger = False
     st.rerun()
+
+# --- Page config ---
+st.set_page_config(layout="wide")
+st.header(
+    "🌲 TIMBER: AVI/TDA/Report Generator",
+    help="Before using this form:\n\n1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n2. Use P3 satellite imagery to divide the footprint into tree stand sections and calculate the area of each polygon\n3. Identify the site LSD, locate the corresponding P3 map, and georeference it to the area using ground control points (GCPs) tied to township corners, then rectify the map\n\nFor this form:\n\nComplete the form step by step for each tree stand. Copy the values from the white boxes on the right into the ArcMap table, and enter \"Y\" if merchantable timber is present. After each stand, click “Save Entry” to save and move to a new entry. Once all stands are complete, click “Finish (Show Totals)” to calculate totals, then “Finish (Fill Salvage Draft)” to populate the final Timber form."
+)
 
 # --- Calculate AVI and volumes ---
 def calculate_avi_and_volumes(is_merch, crown_density, avg_stand_height, dom_species, dom_cover, sec_species, sec_cover, area, region):
@@ -269,14 +281,14 @@ with col1:
         st.session_state.current_entry_index < len(st.session_state.results_log)):
         entry = st.session_state.results_log[st.session_state.current_entry_index]
         st.session_state.is_merch = "Yes" if entry.get("is_merch", True) else "No"
-        st.session_state.crown_density = entry.get("crown_density", 70)
-        st.session_state.avg_stand_height = entry.get("avg_stand_height", 0)
+        st.session_state.crown_density = entry.get("crown_density", default_values["crown_density"])
+        st.session_state.avg_stand_height = entry.get("avg_stand_height", default_values["avg_stand_height"])
         st.session_state.dom_sel = f"{entry['dom_sp']} ({species_names[entry['dom_sp']]})"
         st.session_state.dom_cover = entry["dom_pct"]
         st.session_state.sec_cover = entry["sec_pct"]
         st.session_state.sec_sel = f"{entry['sec_sp']} ({species_names[entry['sec_sp']]})" if entry["sec_sp"] else ""
-        st.session_state.area = entry.get("area", 1.0)
-        st.session_state.region = entry.get("region", "Boreal")
+        st.session_state.area = entry.get("area", default_values["area"])
+        st.session_state.region = entry.get("region", default_values["region"])
 
     is_merch = st.selectbox(
         "Is it merch?",
@@ -773,22 +785,5 @@ if st.session_state.show_salvage_form:
 
 # --- Reset ---
 if st.button("Reset All Entries"):
-    st.session_state.results_log.clear()
-    st.session_state.show_salvage_form = False
-    st.session_state.current_entry_index = -1
-    st.session_state.edit_mode = False
-    st.session_state.dom_cover = 70
-    st.session_state.sec_cover = 30
-    st.session_state.dom_species = species_choices[0].split(" ")[0]
-    st.session_state.sec_species = ""
-    st.session_state.avg_stand_height = 0
-    # Reset all widget-related session state keys
-    st.session_state.is_merch = default_values["is_merch"]
-    st.session_state.crown_density = default_values["crown_density"]
-    st.session_state.dom_sel = default_values["dom_sel"]
-    st.session_state.sec_sel = default_values["sec_sel"]
-    st.session_state.area = default_values["area"]
-    st.session_state.region = default_values["region"]
-    st.session_state.reset_trigger = False
-    st.success("All saved entries and input fields cleared.")
+    st.session_state.reset_trigger = True
     st.rerun()
