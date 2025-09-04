@@ -565,9 +565,9 @@ if st.session_state.show_salvage_form:
         )
         other_con = raw_con - spruce_raw - pine_raw
         if raw_con>0:
-            spruce_pct = round(spruce_raw/raw_con*100,0)
-            pine_pct = round(pine_raw/raw_con*100,0)
-            other_con_pct = round(100 - spruce_pct - pine_pct,0)
+            spruce_pct = int(round(spruce_raw/raw_con*100,0))
+            pine_pct = int(round(pine_raw/raw_con*100,0))
+            other_con_pct = int(round(100 - spruce_pct - pine_pct,0))
         else:
             spruce_pct = pine_pct = other_con_pct = 0
 
@@ -579,8 +579,8 @@ if st.session_state.show_salvage_form:
         )
         other_dec = raw_dec - aspen_raw
         if raw_dec>0:
-            aspen_pct = round(aspen_raw/raw_dec*100,0)
-            other_dec_pct = round(100 - aspen_pct,0)
+            aspen_pct = int(round(aspen_raw/raw_dec*100,0))
+            other_dec_pct = int(round(100 - aspen_pct,0))
         else:
             aspen_pct = other_dec_pct = 0
 
