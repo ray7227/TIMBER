@@ -609,13 +609,13 @@ if st.session_state.show_salvage_form:
         # Disposition
         p = doc.add_paragraph(); p.alignment = 1
         r1 = p.add_run("Disposition: ");   r1.font.name = "Times New Roman"; r1.font.size = Pt(10); r1.font.bold = True
-        r2 = p.add_run(disposition);       r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = True; r2.font.underline = True
+        r2 = p.add_run(disposition);       r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False; r2.font.underline = True
         p.paragraph_format.space_after = Pt(0)
 
         # Legal Land Location
         p = doc.add_paragraph(); p.alignment = 1
         r1 = p.add_run("Legal Land Location: ");   r1.font.name = "Times New Roman"; r1.font.size = Pt(10); r1.font.bold = True
-        r2 = p.add_run(legal_loc);                 r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = True; r2.font.underline = True
+        r2 = p.add_run(legal_loc);                 r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False; r2.font.underline = True
         p.paragraph_format.space_after = Pt(0)
 
         # Horizontal line
@@ -651,7 +651,6 @@ if st.session_state.show_salvage_form:
             p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
             left_indent = "" if left in ["Native grassland", "Tame pasture", "Cropland", "Sparsely or non-vegetated", "Cutblock - planted"] else "\t"
             right_indent = "\t\t" if left in ["Tame pasture", "Cropland"] else "\t" if left not in ["Sparsely or non-vegetated", "Tame pasture", "Cropland"] else ""
-            extra_text = ""
             if right == "Treed wetland":
                 extra_text = "\t\t"
                 run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} {right}{extra_text}")
@@ -671,8 +670,14 @@ if st.session_state.show_salvage_form:
                 run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} {right}\t\t{con_class_box('C')} C More than 70% coniferous")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
             elif right == "Other (specify)":
-                extra_text = f": {other_specify_details}" if "Other (specify)" in vegetation and other_specify_details else ""
-                run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} {right}{extra_text}\t\t")
+                run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} {right}")
+                run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+                if "Other (specify)" in vegetation and other_specify_details:
+                    run = p.add_run(f": ")
+                    run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+                    run = p.add_run(other_specify_details)
+                    run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
+                run = p.add_run("\t\t")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
                 run = p.add_run("Mixedwood Forest:")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True; run.font.underline = True
@@ -732,12 +737,16 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDisposition number & Holder name of FMA: {disposition_fma}")
+        run = p.add_run(f"\tDisposition number & Holder name of FMA: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(disposition_fma)
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDisposition number & Holder name of CTLR: {disposition_ctlr}")
+        run = p.add_run(f"\tDisposition number & Holder name of CTLR: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(disposition_ctlr)
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Section 3: Utilization Standards
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(0)
@@ -761,8 +770,11 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tIf ‘Yes’, provide justification: {justification if salvage_waiver == 'Yes' else ''}")
+        run = p.add_run(f"\tIf ‘Yes’, provide justification: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        if salvage_waiver == "Yes":
+            run = p.add_run(justification)
+            run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
