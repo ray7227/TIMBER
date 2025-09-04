@@ -496,7 +496,7 @@ if st.session_state.show_salvage_form:
     disposition = st.text_input(
         "Disposition",
         key="disposition",
-        help="Type will match whatever is being submitted through the corresponding One Stop Application. Example PLA and RTFs, RTFs, MSL etc."
+        help="The disposition will include a reference such as (RTF). If the application was submitted through a OneStop Application, it will include both the disposition type and the number, for example (RTF2525)."
     )
     legal_loc = st.text_input(
         "Legal Land Location",
@@ -525,14 +525,14 @@ if st.session_state.show_salvage_form:
     disposition_fma = st.text_input(
         "Disposition # of FMA & Holder Name:",
         key="disposition_fma",
-        help="Find FMA or Disposition Info on the Sketch Plan, PLSR (best source), EDP, or OneStop. If no disposition, contact the SRD field office.\n\nEnter FMA name and number. FMAs, CTLs (conifer only), and DTLs (deciduous only) each have associated numbers, often tied to FMUs. FMAs have first rights but CTL/DTL consent may still be needed.\n\nSources:\n• PLSR – Most accurate (includes all numbers)\n• Abadata – Terrain > Forest Management Areas\n• OneStop – Lands tab (CTL/DTL may be blank)\n• FMA/FMUMaps – Spatial reference"
+        help="Find FMA or Disposition Info on the Sketch Plan, PLSR (best source), EDP, Abadata (Terrain > Forest Management Areas), FMA/FMUMaps, or OneStop Application. If no FMA, contact the SRD field office."
     )
     no_disposition_fma = st.checkbox("None", key="no_disposition_fma")
 
     disposition_ctlr = st.text_input(
         "Disposition # of CTLR & Holder Name:",
         key="disposition_ctlr",
-        help="Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP."
+        help="Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP. Project plans will show the CTLR number and holder name. CTLR is divided into DTL (Deciduous Timber Licence) and CTL (Coniferous Timber Licence). Input all CTLs and DTLs in here if present."
     )
 
     salvage_waiver = st.radio(
