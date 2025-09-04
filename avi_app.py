@@ -550,7 +550,7 @@ if st.session_state.show_salvage_form:
                   sum(e["sec_pct"] for e in st.session_state.results_log if e["sec_sp"] in conifers)
         raw_dec = sum(e["dom_pct"] for e in st.session_state.results_log if e["dom_sp"] in deciduous) + \
                   sum(e["sec_pct"] for e in st.session_state.results_log if e["sec_sp"] in deciduous)
-        pct_con = round(raw_con/(raw_con+raw_dec)*100,1) if (raw_con+raw_dec)>0 else 0.0
+        pct_con = round(raw_con/(raw_con+raw_dec)*100,0) if (raw_con+raw_dec)>0 else 0
 
         # conifer splits
         spruce_raw = sum(
@@ -565,11 +565,11 @@ if st.session_state.show_salvage_form:
         )
         other_con = raw_con - spruce_raw - pine_raw
         if raw_con>0:
-            spruce_pct = round(spruce_raw/raw_con*100,1)
-            pine_pct = round(pine_raw/raw_con*100,1)
-            other_con_pct = round(100 - spruce_pct - pine_pct,1)
+            spruce_pct = round(spruce_raw/raw_con*100,0)
+            pine_pct = round(pine_raw/raw_con*100,0)
+            other_con_pct = round(100 - spruce_pct - pine_pct,0)
         else:
-            spruce_pct = pine_pct = other_con_pct = 0.0
+            spruce_pct = pine_pct = other_con_pct = 0
 
         # deciduous splits
         aspen_raw = sum(
@@ -579,10 +579,10 @@ if st.session_state.show_salvage_form:
         )
         other_dec = raw_dec - aspen_raw
         if raw_dec>0:
-            aspen_pct = round(aspen_raw/raw_dec*100,1)
-            other_dec_pct = round(100 - aspen_pct,1)
+            aspen_pct = round(aspen_raw/raw_dec*100,0)
+            other_dec_pct = round(100 - aspen_pct,0)
         else:
-            aspen_pct = other_dec_pct = 0.0
+            aspen_pct = other_dec_pct = 0
 
         # --- determine coniferous class checkbox ---
         def con_class_box(label):
@@ -609,13 +609,13 @@ if st.session_state.show_salvage_form:
         # Disposition
         p = doc.add_paragraph(); p.alignment = 1
         r1 = p.add_run("Disposition: ");   r1.font.name = "Times New Roman"; r1.font.size = Pt(10); r1.font.bold = True
-        r2 = p.add_run(disposition);       r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False; r2.font.underline = True
+        r2 = p.add_run(disposition);       r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False
         p.paragraph_format.space_after = Pt(0)
 
         # Legal Land Location
         p = doc.add_paragraph(); p.alignment = 1
         r1 = p.add_run("Legal Land Location: ");   r1.font.name = "Times New Roman"; r1.font.size = Pt(10); r1.font.bold = True
-        r2 = p.add_run(legal_loc);                 r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False; r2.font.underline = True
+        r2 = p.add_run(legal_loc);                 r2.font.name = "Times New Roman"; r2.font.size = Pt(10); r2.font.bold = False
         p.paragraph_format.space_after = Pt(0)
 
         # Horizontal line
