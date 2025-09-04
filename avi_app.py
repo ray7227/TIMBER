@@ -8,6 +8,7 @@ from docx.oxml.ns import qn
 from tempfile import NamedTemporaryFile
 import base64
 import re
+import math
 
 # --- Load TDA tables ---
 @st.cache_data
@@ -711,12 +712,18 @@ if st.session_state.show_salvage_form:
         total_d_vol = sum(e["D_Vol"] for e in st.session_state.results_log if e["D_Vol"] is not None)
         total_d_load = sum(e["D_Load"] for e in st.session_state.results_log if e["D_Load"] is not None)
 
+        # Round volume and load to one decimal place using math.ceil
+        total_c_vol = math.ceil(total_c_vol * 10) / 10
+        total_c_load = math.ceil(total_c_load * 10) / 10
+        total_d_vol = math.ceil(total_d_vol * 10) / 10
+        total_d_load = math.ceil(total_d_load * 10) / 10
+
         # Coniferous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
         run = p.add_run(f"\tConiferous approx. volume: "); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-        run = p.add_run(f"{total_c_vol}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
+        run = p.add_run(f"{total_c_vol:.1f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
         run = p.add_run(f" m³  or  "); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-        run = p.add_run(f"{total_c_load:.2f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
+        run = p.add_run(f"{total_c_load:.1f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
         run = p.add_run(f" loads"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         # Coniferous species percentages
@@ -731,9 +738,9 @@ if st.session_state.show_salvage_form:
         # Deciduous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
         run = p.add_run(f"\tDeciduous approx. volume: "); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-        run = p.add_run(f"{total_d_vol}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
+        run = p.add_run(f"{total_d_vol:.1f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
         run = p.add_run(f" m³  or  "); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-        run = p.add_run(f"{total_d_load:.2f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
+        run = p.add_run(f"{total_d_load:.1f}"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
         run = p.add_run(f" loads"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         # Deciduous species percentages
