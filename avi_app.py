@@ -9,6 +9,10 @@ from tempfile import NamedTemporaryFile
 import base64
 import re
 import math
+import geopandas as gpd
+import zipfile
+import shutil
+from tempfile import mkdtemp
 
 # --- Load TDA tables ---
 @st.cache_data
@@ -822,3 +826,84 @@ if st.session_state.show_salvage_form:
 if st.button("Reset All Entries"):
     st.session_state.reset_trigger = True
     st.rerun()
+
+# --- Shapefile Merger in Sidebar ---
+st.sidebar.header("Shapefile Merger Tool")
+st.sidebar.markdown("Upload zip files each containing a full shapefile (.shp, .shx, .dbf, etc.).")
+uploaded_zips = st.sidebar.file_uploader("Upload Shapefile Zips", type="zip", accept_multiple_files=True)
+dissolve = st.sidebar.checkbox("Dissolve into Single Polygon (ignores attributes)", value=False)
+
+if uploaded_zips:
+    temp_dirs = []
+    gdfs = []
+    try:
+        for uz in uploaded_zips:
+            # Create temp dir for extraction
+            temp_dir = mkdtemp()
+            temp_dirs.append(temp_dir)
+            
+            # Extract zip
+            with zipfile.ZipFile(uz, 'r') as zf:
+                zf.extractall(temp_dir)
+            
+            # Find .shp file
+            shp_files = [f for f in os.listdir(temp_dir) if f.lower().endswith('.shp')]
+            if not shp_files:
+                st.sidebar.warning(f"No .shp file found in {uz.name}. Skipping.")
+                continue
+            
+            shp_path = os.path.join(temp_dir, shp_files[0])
+            
+            # Read with geopandas
+            gdf = gpd.read_file(shp_path)
+            if not all(gdf.geom_type == 'Polygon'):
+                st.sidebar.warning(f"{uz.name} contains non-polygon geometries. Skipping.")
+                continue
+            
+            gdfs.append(gdf)
+        
+        if gdfs:
+            # Concatenate
+            merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True))
+            
+            # Reproject to common CRS if needed
+            if len(set(gdf.crs for gdf in gdfs)) > 1:
+                common_crs = gdfs[0].crs
+                merged_gdf = merged_gdf.to_crs(common_crs)
+            
+            # Optional dissolve
+            if dissolve:
+                merged_gdf = merged_gdf.dissolve()
+            
+            # Prepare output
+            output_dir = mkdtemp()
+            output_shp = os.path.join(output_dir, 'merged.shp')
+            merged_gdf.to_file(output_shp)
+            
+            # Create zip of output shapefile components
+            output_zip_path = os.path.join(output_dir, 'merged_shapefile.zip')
+            with zipfile.ZipFile(output_zip_path, 'w') as zf:
+                for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                    file_path = output_shp.replace('.shp', ext)
+                    if os.path.exists(file_path):
+                        zf.write(file_path, os.path.basename(file_path))
+            
+            # Provide download
+            with open(output_zip_path, 'rb') as f:
+                st.sidebar.download_button(
+                    "Download Merged Shapefile (Zip)",
+                    f,
+                    file_name="merged_shapefile.zip",
+                    mime="application/zip"
+                )
+        else:
+            st.sidebar.error("No valid shapefiles to merge.")
+    except Exception as e:
+        st.sidebar.error(f"Error during merging: {str(e)}")
+    finally:
+        # Cleanup temp dirs
+        for td in temp_dirs:
+            if os.path.exists(td):
+                shutil.rmtree(td)
+        if 'output_dir' in locals() and os.path.exists(output_dir):
+            shutil.rmtree(output_dir)
