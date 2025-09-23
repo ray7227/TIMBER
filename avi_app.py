@@ -781,12 +781,28 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tConiferous 15 cm stump diameter to a 11 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tConiferous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("11")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDeciduous 15 cm stump diameter to a 10 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tDeciduous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("10")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         # Section 4: Timber salvage waiver
         box_yes = "☒" if salvage_waiver == "Yes" else "☐"
