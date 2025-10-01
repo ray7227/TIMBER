@@ -13,6 +13,8 @@ import geopandas as gpd
 import zipfile
 import shutil
 from tempfile import mkdtemp
+import tempfile
+from pathlib import Path
 
 # --- Load TDA tables ---
 @st.cache_data
@@ -868,83 +870,140 @@ if st.button("Reset All Entries"):
     st.session_state.reset_trigger = True
     st.rerun()
 
-# --- Shapefile Merger in Sidebar ---
-st.sidebar.header("Shapefile Merger Tool")
-st.sidebar.markdown("Upload zip files each containing a full shapefile (.shp, .shx, .dbf, etc.).")
-uploaded_zips = st.sidebar.file_uploader("Upload Shapefile Zips", type="zip", accept_multiple_files=True)
-dissolve = st.sidebar.checkbox("Dissolve into Single Polygon (ignores attributes)", value=False)
+# --- Shapefile Dissolver in Sidebar ---
+st.sidebar.header("Shapefile Dissolver Tool")
+st.sidebar.markdown("Drag and drop zip files containing shapefiles to dissolve polygons individually.")
 
-if uploaded_zips:
-    temp_dirs = []
-    gdfs = []
-    try:
-        for uz in uploaded_zips:
-            # Create temp dir for extraction
-            temp_dir = mkdtemp()
-            temp_dirs.append(temp_dir)
-            
-            # Extract zip
-            with zipfile.ZipFile(uz, 'r') as zf:
-                zf.extractall(temp_dir)
-            
-            # Find .shp file
-            shp_files = [f for f in os.listdir(temp_dir) if f.lower().endswith('.shp')]
-            if not shp_files:
-                st.sidebar.warning(f"No .shp file found in {uz.name}. Skipping.")
-                continue
-            
-            shp_path = os.path.join(temp_dir, shp_files[0])
-            
-            # Read with geopandas
-            gdf = gpd.read_file(shp_path)
-            if not all(gdf.geom_type == 'Polygon'):
-                st.sidebar.warning(f"{uz.name} contains non-polygon geometries. Skipping.")
-                continue
-            
-            gdfs.append(gdf)
+# File uploader for drag-and-drop
+uploaded_files = st.sidebar.file_uploader(
+    "Upload .zip files", 
+    type=["zip"], 
+    accept_multiple_files=True, 
+    help="Select or drag and drop .zip files containing shapefiles."
+)
+
+# Create a temporary directory for processing
+temp_base_dir = Path(tempfile.mkdtemp())
+output_dir = temp_base_dir / "dissolved_output"
+output_dir.mkdir(parents=True, exist_ok=True)
+
+# Log file for debugging
+log_file = output_dir / "processing_log.txt"
+with open(log_file, "w") as log:
+    log.write("Processing started\n")
+
+# Process uploaded files
+if uploaded_files:
+    for uploaded_file in uploaded_files:
+        # Save uploaded .zip file to temporary directory
+        zip_path = temp_base_dir / uploaded_file.name
+        with open(zip_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
         
-        if gdfs:
-            # Concatenate
-            merged_gdf = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True))
-            
-            # Reproject to common CRS if needed
-            if len(set(gdf.crs for gdf in gdfs)) > 1:
-                common_crs = gdfs[0].crs
-                merged_gdf = merged_gdf.to_crs(common_crs)
-            
-            # Optional dissolve
-            if dissolve:
-                merged_gdf = merged_gdf.dissolve()
-            
-            # Prepare output
-            output_dir = mkdtemp()
-            output_shp = os.path.join(output_dir, 'merged.shp')
-            merged_gdf.to_file(output_shp)
-            
-            # Create zip of output shapefile components
-            output_zip_path = os.path.join(output_dir, 'merged_shapefile.zip')
-            with zipfile.ZipFile(output_zip_path, 'w') as zf:
-                for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
-                    file_path = output_shp.replace('.shp', ext)
-                    if os.path.exists(file_path):
-                        zf.write(file_path, os.path.basename(file_path))
-            
-            # Provide download
-            with open(output_zip_path, 'rb') as f:
-                st.sidebar.download_button(
-                    "Download Merged Shapefile (Zip)",
-                    f,
-                    file_name="merged_shapefile.zip",
-                    mime="application/zip"
-                )
-        else:
-            st.sidebar.error("No valid shapefiles to merge.")
-    except Exception as e:
-        st.sidebar.error(f"Error during merging: {str(e)}")
-    finally:
-        # Cleanup temp dirs
-        for td in temp_dirs:
-            if os.path.exists(td):
-                shutil.rmtree(td)
-        if 'output_dir' in locals() and os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
+        with open(log_file, "a") as log:
+            log.write(f"\nProcessing {zip_path.name}...\n")
+            st.sidebar.write(f"Processing {zip_path.name}...")
+
+            # Create subfolder for this specific zip
+            zip_subdir = output_dir / zip_path.stem
+            zip_subdir.mkdir(exist_ok=True)
+
+            # Temporary extraction folder
+            temp_dir = temp_base_dir / f"temp_{zip_path.stem}"
+            temp_dir.mkdir(exist_ok=True)
+
+            try:
+                # Extract all contents
+                with zipfile.ZipFile(zip_path, "r") as z:
+                    z.extractall(temp_dir)
+                log.write(f"Extracted {zip_path.name} to {temp_dir}\n")
+
+                # Find shapefiles
+                shapefiles = list(temp_dir.glob("*.shp"))
+                if not shapefiles:
+                    log.write(f"No shapefiles found in {zip_path.name}, skipping.\n")
+                    st.sidebar.warning(f"No shapefiles found in {zip_path.name}, skipping.")
+                    continue
+
+                if len(shapefiles) > 1:
+                    log.write(f"Warning: Multiple shapefiles found in {zip_path.name}. Processing only: {shapefiles[0]}\n")
+                    st.sidebar.warning(f"Warning: Multiple shapefiles found. Using: {shapefiles[0]}")
+
+                # Load the shapefile
+                try:
+                    gdf = gpd.read_file(shapefiles[0])
+                    log.write(f"Loaded shapefile: {shapefiles[0]}\n")
+                except Exception as e:
+                    log.write(f"Error reading {shapefiles[0]}: {str(e)}\n")
+                    st.sidebar.error(f"Error reading {shapefiles[0]}: {str(e)}")
+                    continue
+
+                # Check for polygon geometries
+                if not gdf.geometry.type.str.contains("Polygon|MultiPolygon").any():
+                    log.write(f"Shapefile {shapefiles[0]} contains no polygons, skipping.\n")
+                    st.sidebar.warning(f"Shapefile {shapefiles[0]} contains no polygons, skipping.")
+                    continue
+
+                # Fix invalid geometries
+                gdf["geometry"] = gdf.geometry.buffer(0)  # Attempt to fix invalid geometries
+                if gdf.geometry.is_valid.all():
+                    log.write("All geometries are valid after buffering.\n")
+                else:
+                    log.write("Warning: Some geometries are still invalid after buffering.\n")
+                    st.sidebar.warning("Warning: Some geometries are invalid.")
+
+                # Dissolve all polygons into a single geometry
+                try:
+                    dissolved_gdf = gdf.dissolve()  # Dissolve all into one polygon
+                    log.write("Dissolve operation successful.\n")
+                except Exception as e:
+                    log.write(f"Error during dissolve: {str(e)}\n")
+                    st.sidebar.error(f"Error during dissolve: {str(e)}")
+                    continue
+
+                # Save the dissolved shapefile in the subfolder
+                out_file = zip_subdir / f"{zip_path.stem}_dissolved.shp"
+                try:
+                    dissolved_gdf.to_file(out_file)
+                    log.write(f"Saved dissolved shapefile: {out_file}\n")
+                    st.sidebar.success(f"✅ Saved dissolved shapefile: {out_file}")
+                except Exception as e:
+                    log.write(f"Error saving {out_file}: {str(e)}\n")
+                    st.sidebar.error(f"Error saving {out_file}: {str(e)}")
+
+            finally:
+                # Cleanup temporary folder
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                    log.write(f"Cleaned up {temp_dir}\n")
+
+    # Zip the entire output directory for download
+    output_zip_path = temp_base_dir / "dissolved_shapefiles.zip"
+    with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(output_dir):
+            for file in files:
+                zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), output_dir))
+
+    # Provide download link for the zipped outputs
+    with open(output_zip_path, "rb") as f:
+        st.sidebar.download_button(
+            label="Download All Dissolved Shapefiles (Zip)",
+            data=f,
+            file_name="dissolved_shapefiles.zip",
+            mime="application/zip"
+        )
+
+    # Provide download link for the log file
+    with open(log_file, "rb") as f:
+        st.sidebar.download_button(
+            label="Download Processing Log",
+            data=f,
+            file_name=log_file.name,
+            mime="text/plain"
+        )
+    
+    st.sidebar.success("🎉 All zip files processed.")
+
+# Cleanup temporary base directory when done
+if temp_base_dir.exists():
+    shutil.rmtree(temp_base_dir)
