@@ -473,8 +473,10 @@ with col2:
         help="Tree growth rates assume ideal conditions and can vary with factors like species, soil, sunlight, and disturbance. Use judgment when estimating tree height for timber assessments."
     )
 
-    p3_date = st.date_input("P3 Map Update Date", value=datetime.date(2000, 1, 1), key="p3_date")
-    p3_height = st.number_input("P3 Height (m)", min_value=0.0, value=10.0, step=0.1, key="p3_height")
+    # Use year and month only for P3 map update date
+    p3_year = st.selectbox("P3 Map Update Year", list(range(1980, 2026)), index=2025-1980, key="p3_year")
+    p3_month = st.selectbox("P3 Map Update Month", list(range(1, 13)), index=0, key="p3_month")
+    p3_height = st.number_input("P3 Height (m)", min_value=0, value=10, step=1, key="p3_height")
     species_sel = st.selectbox("Species", species_choices, key="estimator_species")
 
     if species_sel:
@@ -491,16 +493,17 @@ with col2:
             "Lt": 0.5,   # 0.5
         }
         rate = growth_rates.get(species_code, 0.5)
-        current_date = datetime.date(2025, 10, 6)
+        current_date = datetime.date(2025, 10, 1)
+        p3_date = datetime.date(p3_year, p3_month, 1)
         days_passed = (current_date - p3_date).days
         years = max(0, days_passed / 365.25)  # Ensure non-negative
         added_growth = years * rate
-        estimated_height = p3_height + added_growth
+        estimated_height = int(round(p3_height + added_growth))  # Round to whole number
 
         # Apply rough max height caps where applicable (estimated max heights based on typical values)
         max_heights = {
-            "Aw": 25.0,  # Typical max for Aspen
-            "Lt": 30.0,  # Typical max for Larch
+            "Aw": 25,  # Typical max for Aspen
+            "Lt": 30,  # Typical max for Larch
         }
         if species_code in max_heights:
             estimated_height = min(estimated_height, max_heights[species_code])
@@ -509,7 +512,7 @@ with col2:
         <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
                     background-color:#ECEFF1; color:#000;'>
           <h4 style='color:#607D8B;'>Estimated Current Height</h4>
-          <p style='font-size:20px; font-weight:bold;'>{estimated_height:.1f} m</p>
+          <p style='font-size:20px; font-weight:bold;'>{estimated_height} m</p>
         </div>""", unsafe_allow_html=True)
 
 # --- Show totals ---
