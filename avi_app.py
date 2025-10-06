@@ -15,6 +15,7 @@ import shutil
 from tempfile import mkdtemp
 import tempfile
 from pathlib import Path
+import datetime
 
 # --- Load TDA tables ---
 @st.cache_data
@@ -464,6 +465,52 @@ with col2:
         results = [convert_lsd_to_p3(lsd) for lsd in lsds if convert_lsd_to_p3(lsd)]
         if results:
             st.text("\n".join(results))
+
+    # --- Tree Height Estimator ---
+    st.markdown(
+        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator</h4>",
+        unsafe_allow_html=True,
+        help="Tree growth rates assume ideal conditions and can vary with factors like species, soil, sunlight, and disturbance. Use judgment when estimating tree height for timber assessments."
+    )
+
+    p3_date = st.date_input("P3 Map Update Date", value=datetime.date(2000, 1, 1), key="p3_date")
+    p3_height = st.number_input("P3 Height (m)", min_value=0.0, value=10.0, step=0.1, key="p3_height")
+    species_sel = st.selectbox("Species", species_choices, key="estimator_species")
+
+    if species_sel:
+        species_code = species_sel.split(" ")[0]
+        growth_rates = {
+            "Aw": 0.75,  # midpoint 0.5-1
+            "Pb": 2.0,   # poplar 1-3, midpoint 2
+            "Bw": 1.0,   # 0.5-1.5
+            "Sw": 0.45,  # 0.3-0.6
+            "Sb": 0.45,  # 0.3-0.6
+            "P": 0.75,   # 0.5-1
+            "Fb": 0.4,   # 0.3-0.5
+            "Fd": 0.4,   # assume same as Fb
+            "Lt": 0.5,   # 0.5
+        }
+        rate = growth_rates.get(species_code, 0.5)
+        current_date = datetime.date(2025, 10, 6)
+        days_passed = (current_date - p3_date).days
+        years = max(0, days_passed / 365.25)  # Ensure non-negative
+        added_growth = years * rate
+        estimated_height = p3_height + added_growth
+
+        # Apply rough max height caps where applicable (estimated max heights based on typical values)
+        max_heights = {
+            "Aw": 25.0,  # Typical max for Aspen
+            "Lt": 30.0,  # Typical max for Larch
+        }
+        if species_code in max_heights:
+            estimated_height = min(estimated_height, max_heights[species_code])
+
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Estimated Current Height</h4>
+          <p style='font-size:20px; font-weight:bold;'>{estimated_height:.1f} m</p>
+        </div>""", unsafe_allow_html=True)
 
 # --- Show totals ---
 if st.button("Finish (Show Totals)", key="finish_totals"):
