@@ -520,6 +520,39 @@ with col2:
           <p style='font-size:20px; font-weight:bold;'>{estimated_height} m</p>
         </div>""", unsafe_allow_html=True)
 
+    # --- Tree Height Estimator from Shadows ---
+    st.markdown(
+        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator from Shadows</h4>",
+        unsafe_allow_html=True,
+        help="Estimate tree height using shadow length and approximate sun elevation for Northern Alberta (~55°N). Assumes flat ground and noon sun position. Use for formal estimation; adjust for terrain if needed."
+    )
+
+    sun_elevation_by_month = {
+        "Jan": 12, "Feb": 20, "Mar": 32, "Apr": 45, "May": 55, "Jun": 60,
+        "Jul": 55, "Aug": 45, "Sep": 32, "Oct": 20, "Nov": 12, "Dec": 8
+    }
+    shadow_month = st.selectbox("Image Month", list(sun_elevation_by_month.keys()), key="shadow_month")
+    shadow_length = st.number_input("Shadow Length (m)", min_value=0.0, value=10.0, step=0.1, key="shadow_length")
+    measured_height = st.number_input("Measured Height (m, optional)", min_value=0.0, value=0.0, step=0.1, key="measured_height")
+
+    if shadow_month and shadow_length > 0:
+        elev = sun_elevation_by_month[shadow_month]
+        est_height = round(shadow_length * math.tan(math.radians(elev)), 2)
+        display_text = f"<p><b>Month:</b> {shadow_month}</p>"
+        display_text += f"<p><b>Sun Elevation:</b> {elev}°</p>"
+        display_text += f"<p><b>Shadow Length:</b> {shadow_length} m</p>"
+        display_text += f"<p style='font-size:20px; font-weight:bold;'>Estimated Height: {est_height:.2f} m</p>"
+        if measured_height > 0:
+            diff = measured_height - est_height
+            display_text += f"<p><b>Measured Height:</b> {measured_height} m (Δ {diff:+.2f} m)</p>"
+
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Estimated Height from Shadow</h4>
+          {display_text}
+        </div>""", unsafe_allow_html=True)
+
 # --- Show totals ---
 if st.button("Finish (Show Totals)", key="finish_totals"):
     total_c_vol = sum(e["C_Vol"] for e in st.session_state.results_log if e["C_Vol"] is not None)
