@@ -492,6 +492,17 @@ with col2:
             "Fd": 0.4,   # assume same as Fb
             "Lt": 0.5,   # 0.5
         }
+        max_heights = {
+            "Sw": 30,  # White spruce
+            "Sb": 20,  # Black spruce
+            "P": 30,   # Pine
+            "Fb": 25,  # Balsam fir
+            "Fd": 40,  # Douglas fir
+            "Lt": 30,  # Larch
+            "Aw": 25,  # Aspen
+            "Pb": 30,  # Balsam poplar
+            "Bw": 20,  # White birch
+        }
         rate = growth_rates.get(species_code, 0.5)
         current_date = datetime.date(2025, 10, 1)
         p3_date = datetime.date(p3_year, p3_month, 1)
@@ -499,14 +510,8 @@ with col2:
         years = max(0, days_passed / 365.25)  # Ensure non-negative
         added_growth = years * rate
         estimated_height = int(round(p3_height + added_growth))  # Round to whole number
-
-        # Apply rough max height caps where applicable (estimated max heights based on typical values)
-        max_heights = {
-            "Aw": 25,  # Typical max for Aspen
-            "Lt": 30,  # Typical max for Larch
-        }
-        if species_code in max_heights:
-            estimated_height = min(estimated_height, max_heights[species_code])
+        # Cap at species-specific maximum height
+        estimated_height = min(estimated_height, max_heights.get(species_code, 40))
 
         st.markdown(f"""
         <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
