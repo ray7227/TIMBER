@@ -1016,7 +1016,7 @@ if uploaded_files:
                 log.write(f"Extracted {zip_path.name} to {temp_dir}\n")
 
                 # Find shapefiles
-                shapefiles = list chewing(temp_dir.glob("*.shp"))
+                shapefiles = list(temp_dir.glob("*.shp"))
                 if not shapefiles:
                     log.write(f"No shapefiles found in {zip_path.name}, skipping.\n")
                     st.sidebar.warning(f"No shapefiles found in {zip_path.name}, skipping.")
@@ -1104,3 +1104,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
