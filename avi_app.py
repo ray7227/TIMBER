@@ -894,7 +894,7 @@ if st.session_state.show_salvage_form:
         for i, ctlr in enumerate(st.session_state.ctlr_list):
             if ctlr.strip():  # Only include non-empty CTLR entries
                 p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-                run = p.add_run(f"\tDisposition number & Holder name of CTLR {i+1}: ")
+                run = p.add_run(f"\tDisposition number & Holder name of CTLR: ")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
                 run = p.add_run(ctlr)
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
