@@ -98,7 +98,7 @@ if 'area' not in st.session_state:
 if 'region' not in st.session_state:
     st.session_state.region = default_values["region"]
 if 'ctlr_list' not in st.session_state:
-    st.session_state.ctlr_list = [""]
+    st.session_state.ctlr_list = [{"type": "", "number_holder": ""}]
 
 # --- Reset widget defaults if triggered ---
 if st.session_state.reset_trigger:
@@ -119,7 +119,7 @@ if st.session_state.reset_trigger:
     st.session_state.sec_sel = default_values["sec_sel"]
     st.session_state.area = default_values["area"]
     st.session_state.region = default_values["region"]
-    st.session_state.ctlr_list = [""]
+    st.session_state.ctlr_list = [{"type": "", "number_holder": ""}]
     st.session_state.reset_trigger = False
     st.rerun()
 
@@ -237,7 +237,7 @@ with col_nav2:
             st.session_state.region
         )
         if st.session_state.current_entry_index >= 0 and st.session_state.edit_mode and st.session_state.results_log:
-            # Save current entry if in edit mode
+            # Save current entry if in edit mode泳
             entry_data = {
                 "C_Vol": c_vol,
                 "C_Load": c_load,
@@ -627,12 +627,26 @@ if st.session_state.show_salvage_form:
     no_disposition_fma = st.checkbox("None", key="no_disposition_fma")
 
     # Dynamic multiple CTLR fields
-    st.write("Disposition # of CTLR & Holder Name:")
+    st.write("Coniferous/Deciduous Dispositions (Type–Number–Holder):")
     for i in range(len(st.session_state.ctlr_list)):
-        st.session_state.ctlr_list[i] = st.text_input(f"CTLR {i+1}", st.session_state.ctlr_list[i], key=f"ctlr_{i}", help="Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP. Project plans will show the CTLR number and holder name. CTLR is divided into DTL (Deciduous Timber Licence) and CTL (Coniferous Timber Licence). Input all CTLs and DTLs in here if present.")
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.session_state.ctlr_list[i]["type"] = st.text_input(
+                f"Type {i+1}",
+                st.session_state.ctlr_list[i]["type"],
+                key=f"ctlr_type_{i}",
+                help="Enter the disposition type (e.g., CTL, DTL)."
+            )
+        with col2:
+            st.session_state.ctlr_list[i]["number_holder"] = st.text_input(
+                f"Number & Holder {i+1}",
+                st.session_state.ctlr_list[i]["number_holder"],
+                key=f"ctlr_number_holder_{i}",
+                help="Enter the disposition number and holder name. Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP. Project plans will show the number and holder name."
+            )
 
-    if st.button("Add Another CTLR"):
-        st.session_state.ctlr_list.append("")
+    if st.button("Add Another Disposition"):
+        st.session_state.ctlr_list.append({"type": "", "number_holder": ""})
         st.rerun()
 
     salvage_waiver = st.radio(
@@ -892,11 +906,11 @@ if st.session_state.show_salvage_form:
 
         # Handle multiple CTLR entries
         for i, ctlr in enumerate(st.session_state.ctlr_list):
-            if ctlr.strip():  # Only include non-empty CTLR entries
+            if ctlr["type"].strip() or ctlr["number_holder"].strip():  # Only include non-empty entries
                 p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-                run = p.add_run(f"\tDisposition number & Holder name of CTLR: ")
+                run = p.add_run(f"\tDisposition number & Holder name of {ctlr['type']}: ")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-                run = p.add_run(ctlr)
+                run = p.add_run(ctlr["number_holder"])
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Section 3: Utilization Standards
