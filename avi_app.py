@@ -97,8 +97,6 @@ if 'area' not in st.session_state:
     st.session_state.area = default_values["area"]
 if 'region' not in st.session_state:
     st.session_state.region = default_values["region"]
-if 'ctlr_list' not in st.session_state:
-    st.session_state.ctlr_list = [""]
 
 # --- Reset widget defaults if triggered ---
 if st.session_state.reset_trigger:
@@ -121,6 +119,13 @@ if st.session_state.reset_trigger:
     st.session_state.region = default_values["region"]
     st.session_state.reset_trigger = False
     st.rerun()
+
+# --- Page config ---
+st.set_page_config(layout="wide")
+st.header(
+    "🌲 TIMBER: AVI/TDA/Report Generator",
+    help="Before using this form:\n\n1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n2. Use P3 satellite imagery to divide the footprint into tree stand sections and calculate the area of each polygon\n3. Identify the site LSD, locate the corresponding P3 map, and georeference it to the area using ground control points (GCPs) tied to township corners, then rectify the map\n\nFor this form:\n\nComplete the form step by step for each tree stand. Copy the values from the white boxes on the right into the ArcMap table, and enter \"Y\" if merchantable timber is present. After each stand, click “Save Entry” to save and move to a new entry. Once all stands are complete, click “Finish (Show Totals)” to calculate totals, then “Finish (Fill Salvage Draft)” to populate the final Timber form."
+)
 
 # --- Calculate AVI and volumes ---
 def calculate_avi_and_volumes(is_merch, crown_density, avg_stand_height, dom_species, dom_cover, sec_species, sec_cover, area, region):
@@ -461,6 +466,93 @@ with col2:
         if results:
             st.text("\n".join(results))
 
+    # --- Tree Height Estimator ---
+    st.markdown(
+        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator</h4>",
+        unsafe_allow_html=True,
+        help="Tree growth rates assume ideal conditions and can vary with factors like species, soil, sunlight, and disturbance. Use judgment when estimating tree height for timber assessments."
+    )
+
+    # Use year and month only for P3 map update date
+    p3_year = st.selectbox("P3 Map Update Year", list(range(1980, 2026)), index=2025-1980, key="p3_year")
+    p3_month = st.selectbox("P3 Map Update Month", list(range(1, 13)), index=0, key="p3_month")
+    p3_height = st.number_input("P3 Height (m)", min_value=0, value=10, step=1, key="p3_height")
+    species_sel = st.selectbox("Species", species_choices, key="estimator_species")
+
+    if species_sel:
+        species_code = species_sel.split(" ")[0]
+        growth_rates = {
+            "Aw": 0.75,  # midpoint 0.5-1
+            "Pb": 2.0,   # poplar 1-3, midpoint 2
+            "Bw": 1.0,   # 0.5-1.5
+            "Sw": 0.45,  # 0.3-0.6
+            "Sb": 0.45,  # 0.3-0.6
+            "P": 0.75,   # 0.5-1
+            "Fb": 0.4,   # 0.3-0.5
+            "Fd": 0.4,   # assume same as Fb
+            "Lt": 0.5,   # 0.5
+        }
+        max_heights = {
+            "Sw": 30,  # White spruce
+            "Sb": 20,  # Black spruce
+            "P": 30,   # Pine
+            "Fb": 25,  # Balsam fir
+            "Fd": 40,  # Douglas fir
+            "Lt": 30,  # Larch
+            "Aw": 25,  # Aspen
+            "Pb": 30,  # Balsam poplar
+            "Bw": 20,  # White birch
+        }
+        rate = growth_rates.get(species_code, 0.5)
+        current_date = datetime.date(2025, 10, 1)
+        p3_date = datetime.date(p3_year, p3_month, 1)
+        days_passed = (current_date - p3_date).days
+        years = max(0, days_passed / 365.25)  # Ensure non-negative
+        added_growth = years * rate
+        estimated_height = int(round(p3_height + added_growth))  # Round to whole number
+        # Cap at species-specific maximum height
+        estimated_height = min(estimated_height, max_heights.get(species_code, 40))
+
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Estimated Current Height</h4>
+          <p style='font-size:20px; font-weight:bold;'>{estimated_height} m</p>
+        </div>""", unsafe_allow_html=True)
+
+    # --- Tree Height Estimator from Shadows ---
+    st.markdown(
+        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator from Shadows</h4>",
+        unsafe_allow_html=True,
+        help="Estimate tree height using shadow length and approximate sun elevation for Northern Alberta (~55°N). Assumes flat ground and noon sun position. Use for formal estimation; adjust for terrain if needed."
+    )
+
+    sun_elevation_by_month = {
+        "Jan": 12, "Feb": 20, "Mar": 32, "Apr": 45, "May": 55, "Jun": 60,
+        "Jul": 55, "Aug": 45, "Sep": 32, "Oct": 20, "Nov": 12, "Dec": 8
+    }
+    shadow_month = st.selectbox("Image Month", list(sun_elevation_by_month.keys()), key="shadow_month")
+    shadow_length = st.number_input("Shadow Length (m)", min_value=0.0, value=10.0, step=0.1, key="shadow_length")
+    measured_height = st.number_input("Measured Height (m, optional)", min_value=0.0, value=0.0, step=0.1, key="measured_height")
+
+    if shadow_month and shadow_length > 0:
+        elev = sun_elevation_by_month[shadow_month]
+        est_height = round(shadow_length * math.tan(math.radians(elev)), 2)
+        display_text = f"<p><b>Month:</b> {shadow_month}</p>"
+        display_text += f"<p><b>Sun Elevation:</b> {elev}°</p>"
+        display_text += f"<p><b>Shadow Length:</b> {shadow_length} m</p>"
+        display_text += f"<p style='font-size:20px; font-weight:bold;'>Estimated Height: {est_height:.2f} m</p>"
+        if measured_height > 0:
+            diff = measured_height - est_height
+            display_text += f"<p><b>Measured Height:</b> {measured_height} m (Δ {diff:+.2f} m)</p>"
+
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Estimated Height from Shadow</h4>
+          {display_text}
+        </div>""", unsafe_allow_html=True)
+
 # --- Show totals ---
 if st.button("Finish (Show Totals)", key="finish_totals"):
     total_c_vol = sum(e["C_Vol"] for e in st.session_state.results_log if e["C_Vol"] is not None)
@@ -531,17 +623,11 @@ if st.session_state.show_salvage_form:
     )
     no_disposition_fma = st.checkbox("None", key="no_disposition_fma")
 
-    # Dynamic multiple CTLR fields
-    if 'ctlr_list' not in st.session_state:
-        st.session_state.ctlr_list = [""]
-
-    st.write("Disposition # of CTLR & Holder Name:")
-    for i in range(len(st.session_state.ctlr_list)):
-        st.session_state.ctlr_list[i] = st.text_input(f"CTLR {i+1}", st.session_state.ctlr_list[i], key=f"ctlr_{i}", help="Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP. Project plans will show the CTLR number and holder name. CTLR is divided into DTL (Deciduous Timber Licence) and CTL (Coniferous Timber Licence). Input all CTLs and DTLs in here if present.")
-
-    if st.button("Add Another CTLR"):
-        st.session_state.ctlr_list.append("")
-        st.rerun()
+    disposition_ctlr = st.text_input(
+        "Disposition # of CTLR & Holder Name:",
+        key="disposition_ctlr",
+        help="Often CTLR, DTLR, etc. do not exist; if they do, look on the sketch plan, PLSR or EDP. Project plans will show the CTLR number and holder name. CTLR is divided into DTL (Deciduous Timber Licence) and CTL (Coniferous Timber Licence). Input all CTLs and DTLs in here if present."
+    )
 
     salvage_waiver = st.radio(
         "Timber Salvage Waiver Requested?",
@@ -713,7 +799,8 @@ if st.session_state.show_salvage_form:
 
         # Provide volume inventory
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tProvide a volume inventory as follows:"); run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(f"\tProvide a volume inventory as follows:"); 
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         total_c_vol = sum(e["C_Vol"] for e in st.session_state.results_log if e["C_Vol"] is not None)
         total_c_load = sum(e["C_Load"] for e in st.session_state.results_log if e["C_Load"] is not None)
@@ -728,23 +815,59 @@ if st.session_state.show_salvage_form:
 
         # Coniferous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tConiferous approx. volume: {total_c_vol:.1f} m³  or  {total_c_load:.1f} loads")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tConiferous approx. volume: "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{total_c_vol:.1f}"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f" m³"); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = False; run3.font.underline = True
+        run4 = p.add_run(f"  or  "); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = True
+        run5 = p.add_run(f"{total_c_load:.1f}"); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = False; run5.font.underline = True
+        run6 = p.add_run(f" loads"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Coniferous species percentages
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tSpruce {spruce_pct}%    Pine {pine_pct}%    Other {other_con_pct}%")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tSpruce "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{spruce_pct}%"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f"    Pine "); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run(f"{pine_pct}%"); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(f"    Other "); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
+        run6 = p.add_run(f"{other_con_pct}%"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Deciduous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDeciduous approx. volume: {total_d_vol:.1f} m³  or  {total_d_load:.1f} loads")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tDeciduous approx. volume: "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{total_d_vol:.1f}"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f" m³"); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = False; run3.font.underline = True
+        run4 = p.add_run(f"  or  "); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = True
+        run5 = p.add_run(f"{total_d_load:.1f}"); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = False; run5.font.underline = True
+        run6 = p.add_run(f" loads"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Deciduous species percentages
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tAspen {aspen_pct}%    Other {other_dec_pct}%")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tAspen "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{aspen_pct}%"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f"    Other "); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run(f"{other_dec_pct}%"); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
 
         # Section 2: Timber disposition or FMA(s)
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(0)
@@ -756,12 +879,16 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDisposition number & Holder name of FMA: {disposition_fma}")
+        run = p.add_run(f"\tDisposition number & Holder name of FMA: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(disposition_fma)
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDisposition number & Holder name of CTLR: {disposition_ctlr}")
+        run = p.add_run(f"\tDisposition number & Holder name of CTLR: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(disposition_ctlr)
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Section 3: Utilization Standards
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(0)
@@ -769,12 +896,28 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tConiferous 15 cm stump diameter to a 11 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tConiferous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("11")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDeciduous 15 cm stump diameter to a 10 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tDeciduous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("10")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         # Section 4: Timber salvage waiver
         box_yes = "☒" if salvage_waiver == "Yes" else "☐"
@@ -785,8 +928,11 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tIf ‘Yes’, provide justification: {justification if salvage_waiver == 'Yes' else ''}")
+        run = p.add_run(f"\tIf ‘Yes’, provide justification: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        if salvage_waiver == "Yes":
+            run = p.add_run(justification)
+            run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
@@ -881,9 +1027,9 @@ if uploaded_files:
                     continue
 
                 # Check for polygon geometries
-                if not gdf.geom_type.str.contains("Polygon").all():
-                    log.write(f"Shapefile {shapefiles[0]} contains non-polygon geometries, skipping.\n")
-                    st.sidebar.warning(f"Shapefile {shapefiles[0]} contains non-polygon geometries, skipping.")
+                if not gdf.geometry.type.str.contains("Polygon|MultiPolygon").any():
+                    log.write(f"Shapefile {shapefiles[0]} contains no polygons, skipping.\n")
+                    st.sidebar.warning(f"Shapefile {shapefiles[0]} contains no polygons, skipping.")
                     continue
 
                 # Fix invalid geometries
@@ -894,8 +1040,14 @@ if uploaded_files:
                     log.write("Warning: Some geometries are still invalid after buffering.\n")
                     st.sidebar.warning("Warning: Some geometries are invalid.")
 
-                # Optional dissolve
-                dissolved_gdf = gdf.dissolve()  # Dissolve all into one polygon
+                # Dissolve all polygons into a single geometry
+                try:
+                    dissolved_gdf = gdf.dissolve()  # Dissolve all into one polygon
+                    log.write("Dissolve operation successful.\n")
+                except Exception as e:
+                    log.write(f"Error during dissolve: {str(e)}\n")
+                    st.sidebar.error(f"Error during dissolve: {str(e)}")
+                    continue
 
                 # Save the dissolved shapefile in the subfolder
                 out_file = zip_subdir / f"{zip_path.stem}_dissolved.shp"
@@ -943,3 +1095,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
