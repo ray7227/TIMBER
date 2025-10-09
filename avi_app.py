@@ -821,23 +821,59 @@ if st.session_state.show_salvage_form:
 
         # Coniferous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tConiferous approx. volume: {total_c_vol:.1f} m³  or  {total_c_load:.1f} loads")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tConiferous approx. volume: "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{total_c_vol:.1f}"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f" m³"); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = False; run3.font.underline = True
+        run4 = p.add_run(f"  or  "); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = True
+        run5 = p.add_run(f"{total_c_load:.1f}"); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = False; run5.font.underline = True
+        run6 = p.add_run(f" loads"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Coniferous species percentages
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tSpruce {spruce_pct}%    Pine {pine_pct}%    Other {other_con_pct}%")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tSpruce "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{spruce_pct}%"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f"    Pine "); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run(f"{pine_pct}%"); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(f"    Other "); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
+        run6 = p.add_run(f"{other_con_pct}%"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Deciduous volume
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDeciduous approx. volume: {total_d_vol:.1f} m³  or  {total_d_load:.1f} loads")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tDeciduous approx. volume: "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{total_d_vol:.1f}"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f" m³"); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = False; run3.font.underline = True
+        run4 = p.add_run(f"  or  "); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = True
+        run5 = p.add_run(f"{total_d_load:.1f}"); 
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = False; run5.font.underline = True
+        run6 = p.add_run(f" loads"); 
+        run6.font.name = "Times New Roman"; run6.font.size = Pt(10); run6.font.bold = False; run6.font.underline = True
 
         # Deciduous species percentages
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tAspen {aspen_pct}%    Other {other_dec_pct}%")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run(f"\tAspen "); 
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run(f"{aspen_pct}%"); 
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(f"    Other "); 
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run(f"{other_dec_pct}%"); 
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
 
         # Section 2: Timber disposition or FMA(s)
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(0)
@@ -849,15 +885,19 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDisposition number & Holder name of FMA: {disposition_fma}")
+        run = p.add_run(f"\tDisposition number & Holder name of FMA: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run = p.add_run(disposition_fma)
+        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Handle multiple CTLR entries
         for i, ctlr in enumerate(st.session_state.ctlr_list):
             if ctlr.strip():  # Only include non-empty CTLR entries
                 p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-                run = p.add_run(f"\tDisposition number & Holder name of CTLR {i+1}: {ctlr}")
+                run = p.add_run(f"\tDisposition number & Holder name of CTLR {i+1}: ")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+                run = p.add_run(ctlr)
+                run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Section 3: Utilization Standards
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(0)
@@ -865,12 +905,28 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tConiferous 15 cm stump diameter to a 11 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tConiferous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("11")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tDeciduous 15 cm stump diameter to a 10 cm top diameter.")
-        run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        run1 = p.add_run("\tDeciduous ")
+        run1.font.name = "Times New Roman"; run1.font.size = Pt(10); run1.font.bold = True
+        run2 = p.add_run("15")
+        run2.font.name = "Times New Roman"; run2.font.size = Pt(10); run2.font.bold = False; run2.font.underline = True
+        run3 = p.add_run(" cm stump diameter to a ")
+        run3.font.name = "Times New Roman"; run3.font.size = Pt(10); run3.font.bold = True
+        run4 = p.add_run("10")
+        run4.font.name = "Times New Roman"; run4.font.size = Pt(10); run4.font.bold = False; run4.font.underline = True
+        run5 = p.add_run(" cm top diameter.")
+        run5.font.name = "Times New Roman"; run5.font.size = Pt(10); run5.font.bold = True
 
         # Section 4: Timber salvage waiver
         box_yes = "☒" if salvage_waiver == "Yes" else "☐"
@@ -881,8 +937,11 @@ if st.session_state.show_salvage_form:
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
 
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
-        run = p.add_run(f"\tIf ‘Yes’, provide justification: {justification if salvage_waiver == 'Yes' else ''}")
+        run = p.add_run(f"\tIf ‘Yes’, provide justification: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
+        if salvage_waiver == "Yes":
+            run = p.add_run(justification)
+            run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
