@@ -237,7 +237,7 @@ with col_nav2:
             st.session_state.region
         )
         if st.session_state.current_entry_index >= 0 and st.session_state.edit_mode and st.session_state.results_log:
-            # Save current entry if in edit mode泳
+            # Save current entry if in edit mode
             entry_data = {
                 "C_Vol": c_vol,
                 "C_Load": c_load,
@@ -957,22 +957,24 @@ if st.session_state.show_salvage_form:
             run = p.add_run(justification)
             run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
+        # Use disposition input for filename, with a fallback if empty
+        filename = f"Timber_{disposition if disposition.strip() else 'Report'}.docx"
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
-        return tmp.name
+        return tmp.name, filename
 
     if st.button(
         "Done (Generate Report)",
         help="Save Timber form and convert to PDF. Provide to the form to AIM Lands staff and they can submit it to the FMA."
     ):
-        out_path = fill_template()
+        out_path, filename = fill_template()
         if out_path:
             st.success("Report generated!")
             with open(out_path, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode()
                 st.markdown(
                     f'<a href="data:application/octet-stream;base64,{b64}" '
-                    f'download="Filled_Salvage_Report.docx">📥 Download report</a>',
+                    f'download="{filename}">📥 Download report</a>',
                     unsafe_allow_html=True
                 )
 
