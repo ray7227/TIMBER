@@ -635,7 +635,7 @@ if st.session_state.show_salvage_form:
                 f"Type {i+1}",
                 st.session_state.ctlr_list[i]["type"],
                 key=f"ctlr_type_{i}",
-                help="Enter the disposition type (e.g., CTL, DTL)."
+                help="Enter the disposition type (e.g., CTL, DTL, CTLR, CTLC, CTLD)."
             )
         with col2:
             st.session_state.ctlr_list[i]["number_holder"] = st.text_input(
@@ -1120,3 +1120,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
