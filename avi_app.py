@@ -1,4 +1,4 @@
-import os
+import os 
 import streamlit as st 
 import pandas as pd
 from docx import Document
@@ -301,12 +301,10 @@ with col1:
         st.session_state.area = entry.get("area", default_values["area"])
         st.session_state.region = entry.get("region", default_values["region"])
 
-    is_merch = st.selectbox(
-        "Is it merch?",
-        ["Yes", "No"],
-        key="is_merch",
-        help="Enter \"No\" if the stand contains no trees or only very small or new growth trees, as these cannot be processed into merchantable timber (e.g., lumber or planks)."
-    )
+    # --- CHANGE: Removed "Is it merch?" input; always assume Yes ---
+    is_merch = "Yes"
+    st.session_state.is_merch = "Yes"
+
     crown_density = st.slider(
         "Crown Density (%)",
         6, 100,
@@ -320,7 +318,7 @@ with col1:
         st.session_state.get("avg_stand_height", default_values["avg_stand_height"]),
         step=1,
         key="avg_stand_height",
-        help="Use georeferenced P3 maps and satellite imagery to estimate tree height. The second value in old P3 AVI codes (e.g., C1SbLt) gives approximate height in meters (1=10m). Though outdated, this offers a general idea of past stand height—check map dates or cut blocks to help estimate current height. For older data, apply average growth rates: poplar 1–3 m/yr, aspen 0.5–1 m, birch 0.5–1.5 m, spruce 0.3–0.6 m, pine 0.5–1 m, fir 0.3–0.5 m, larch ~0.5 m, adjusting for local conditions. Google Earth shadow length can also be used with sun angle for trigonometric height estimates."
+        help="Use georeferenced P3 maps and satellite imagery to estimate tree height. The second value in old P3 AVI codes (e.g., C1SbLt) gives approximate height in meters (1=10m). Though outdated, this offers a general idea of past stand height—check map dates or cut blocks to help estimate current height. For older data, apply average growth rates: poplar 1–3 m/yr, aspen 0.5–1 m, birch 0.5–1.5 m, spruce 0.3–0.6 m, pine 0.5–1 m, fir 0.3–0.5 m, larch ~0.5 m, adjusting for local conditions. Google Earth shadow length can also be used with sun angle for trigonometric height estimates."
     )
 
     dom_sel = st.selectbox(
@@ -1120,5 +1118,3 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
-
-
