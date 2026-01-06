@@ -443,21 +443,18 @@ with col2:
             return f"P3:{meridian}{range_padded}{township_padded}*"
         return None
 
-    # Create two columns for heading and input
-    col_p3_head, col_p3_input = st.columns([1, 2])
-    with col_p3_head:
-        st.markdown(
-            "<h4 style='margin-bottom: 0; padding-bottom: 0;'>P3 Map Search Converter</h4>",
-            unsafe_allow_html=True,
-            help="Enter one or more LSDs (e.g., NE-20-48-11-W5) in the text area below, one per line. The output will show the SharePoint P3 map search format (P3:MRRTTT*)."
-        )
-    with col_p3_input:
-        lsd_input = st.text_input(
-            "",
-            placeholder="NE-20-48-11-W5 SE-35-67-7-W6",
-            key="lsd_input",
-            label_visibility="collapsed"
-        )
+    # ✅ FIX: st.markdown does NOT support help=. Use Streamlit header/subheader for tooltip.
+    st.subheader(
+        "P3 Map Search Converter",
+        help="Enter one or more LSDs (e.g., NE-20-48-11-W5) in the text area below, one per line. The output will show the SharePoint P3 map search format (P3:MRRTTT*)."
+    )
+
+    lsd_input = st.text_input(
+        "",
+        placeholder="NE-20-48-11-W5 SE-35-67-7-W6",
+        key="lsd_input",
+        label_visibility="collapsed"
+    )
 
     # Process input and display output below Load box
     if lsd_input:
@@ -467,10 +464,9 @@ with col2:
         if results:
             st.text("\n".join(results))
 
-    # --- Tree Height Estimator ---
-    st.markdown(
-        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator</h4>",
-        unsafe_allow_html=True,
+    # ✅ FIX: use subheader for hover help
+    st.subheader(
+        "Tree Height Estimator",
         help="Tree growth rates assume ideal conditions and can vary with factors like species, soil, sunlight, and disturbance. Use judgment when estimating tree height for timber assessments."
     )
 
@@ -521,10 +517,9 @@ with col2:
           <p style='font-size:20px; font-weight:bold;'>{estimated_height} m</p>
         </div>""", unsafe_allow_html=True)
 
-    # --- Tree Height Estimator from Shadows ---
-    st.markdown(
-        "<h4 style='margin-bottom: 0; padding-bottom: 0;'>Tree Height Estimator from Shadows</h4>",
-        unsafe_allow_html=True,
+    # ✅ FIX: use subheader for hover help
+    st.subheader(
+        "Tree Height Estimator from Shadows",
         help="Estimate tree height using shadow length and approximate sun elevation for Northern Alberta (~55°N). Assumes flat ground and noon sun position. Use for formal estimation; adjust for terrain if needed."
     )
 
