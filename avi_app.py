@@ -19,8 +19,8 @@ import datetime
 # --- Load TDA tables ---
 @st.cache_data
 def load_tda(region):
-    path = f"{region.upper()}_TDA.xlsx" # Looks for file in same directory as avi_[app.py](http://app.py)
-    return [pd.read](http://pd.read)_excel(path)
+    path = f"{region.upper()}_TDA.xlsx"  # Looks for file in same directory as app.py
+    return pd.read_excel(path)
 # --- Species mapping & choices ---
 species_names = {
     "Sw": "White spruce",
@@ -1003,3 +1003,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
