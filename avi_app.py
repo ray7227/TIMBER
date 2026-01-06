@@ -649,7 +649,12 @@ if st.session_state.show_salvage_form:
         key="salvage_waiver",
         help="Use when timber is uneconomic to salvage, such as less than 0.5 truckloads. This allows legal on-site destruction of merchantable wood. Also applies to isolated decks on larger projects. Contact Alberta Forestry for guidance, as waiver rules vary by region and FMA."
     )
+
+    # ✅ NEW FEATURE: Autofill waiver justification when "Yes" is selected (without overwriting user edits)
+    DEFAULT_WAIVER_JUSTIFICATION = "Timber salvage is not considered economically viable, given that the estimated volume is below 0.5 truckloads."
     if salvage_waiver == "Yes":
+        if "justification" not in st.session_state or not str(st.session_state.justification).strip():
+            st.session_state.justification = DEFAULT_WAIVER_JUSTIFICATION
         justification = st.text_area("Provide justification:", key="justification")
 
     def fill_template():
@@ -946,15 +951,8 @@ if st.session_state.show_salvage_form:
         p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
         run = p.add_run(f"\tIf ‘Yes’, provide justification: ")
         run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
-DEFAULT_WAIVER_JUSTIFICATION = "Timber salvage is not considered economically viable, given that the estimated volume is below 0.5 truckloads."
-
-if salvage_waiver == "Yes":
-    # Autofill once when user first selects Yes (but still lets them edit freely)
-    if "justification" not in st.session_state or not st.session_state.justification.strip():
-        st.session_state.justification = DEFAULT_WAIVER_JUSTIFICATION
-
-    justification = st.text_area("Provide justification:", key="justification")
-
+        if salvage_waiver == "Yes":
+            run = p.add_run(justification)
             run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
         # Use disposition input for filename, with a fallback if empty
@@ -1120,4 +1118,3 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
-
