@@ -329,7 +329,33 @@ with col1:
     )
     dom_species = dom_sel.split(" ")[0]
     st.session_state.dom_species = dom_species
-    
+
+    # --- NEW: keep dom/sec sliders locked to sum = 100 (both directions) ---
+    if "_syncing_cover" not in st.session_state:
+        st.session_state._syncing_cover = False
+    if "dom_cover_temp" not in st.session_state:
+        st.session_state.dom_cover_temp = st.session_state.dom_cover
+    if "sec_cover_temp" not in st.session_state:
+        st.session_state.sec_cover_temp = st.session_state.sec_cover
+
+    def sync_from_dom():
+        if st.session_state._syncing_cover:
+            return
+        st.session_state._syncing_cover = True
+        st.session_state.dom_cover = st.session_state.dom_cover_temp
+        st.session_state.sec_cover = 100 - st.session_state.dom_cover_temp
+        st.session_state.sec_cover_temp = st.session_state.sec_cover
+        st.session_state._syncing_cover = False
+
+    def sync_from_sec():
+        if st.session_state._syncing_cover:
+            return
+        st.session_state._syncing_cover = True
+        st.session_state.sec_cover = st.session_state.sec_cover_temp
+        st.session_state.dom_cover = 100 - st.session_state.sec_cover_temp
+        st.session_state.dom_cover_temp = st.session_state.dom_cover
+        st.session_state._syncing_cover = False
+
     # Dominant Cover % slider
     dom_cover = st.slider(
         "Dominant Cover %",
@@ -337,12 +363,11 @@ with col1:
         st.session_state.dom_cover,
         step=10,
         key="dom_cover_temp",
-        on_change=lambda: st.session_state.update({
-            'dom_cover': st.session_state.dom_cover_temp,
-            'sec_cover': 100 - st.session_state.dom_cover_temp
-        })
+        on_change=sync_from_dom
     )
     st.session_state.dom_cover = dom_cover
+    st.session_state.sec_cover = 100 - dom_cover
+    st.session_state.sec_cover_temp = st.session_state.sec_cover
 
     sec_opts = [""] + [c for c in species_choices if c.split(" ")[0] != dom_species]
     sec_sel = st.selectbox(
@@ -353,7 +378,7 @@ with col1:
     )
     sec_species = sec_sel.split(" ")[0] if sec_sel else ""
     st.session_state.sec_species = sec_species
-    
+
     # 2nd Cover % slider
     sec_cover = st.slider(
         "2nd Cover %",
@@ -361,12 +386,11 @@ with col1:
         st.session_state.sec_cover,
         step=10,
         key="sec_cover_temp",
-        on_change=lambda: st.session_state.update({
-            'sec_cover': st.session_state.sec_cover_temp,
-            'dom_cover': 100 - st.session_state.sec_cover_temp
-        })
+        on_change=sync_from_sec
     )
     st.session_state.sec_cover = sec_cover
+    st.session_state.dom_cover = 100 - sec_cover
+    st.session_state.dom_cover_temp = st.session_state.dom_cover
 
     area = st.number_input(
         "Area (ha)",
@@ -463,91 +487,6 @@ with col2:
         results = [convert_lsd_to_p3(lsd) for lsd in lsds if convert_lsd_to_p3(lsd)]
         if results:
             st.text("\n".join(results))
-
-    # ✅ FIX: use subheader for hover help
-    st.subheader(
-        "Tree Height Estimator",
-        help="Tree growth rates assume ideal conditions and can vary with factors like species, soil, sunlight, and disturbance. Use judgment when estimating tree height for timber assessments."
-    )
-
-    # Use year and month only for P3 map update date
-    p3_year = st.selectbox("P3 Map Update Year", list(range(1980, 2026)), index=2025-1980, key="p3_year")
-    p3_month = st.selectbox("P3 Map Update Month", list(range(1, 13)), index=0, key="p3_month")
-    p3_height = st.number_input("P3 Height (m)", min_value=0, value=10, step=1, key="p3_height")
-    species_sel = st.selectbox("Species", species_choices, key="estimator_species")
-
-    if species_sel:
-        species_code = species_sel.split(" ")[0]
-        growth_rates = {
-            "Aw": 0.75,  # midpoint 0.5-1
-            "Pb": 2.0,   # poplar 1-3, midpoint 2
-            "Bw": 1.0,   # 0.5-1.5
-            "Sw": 0.45,  # 0.3-0.6
-            "Sb": 0.45,  # 0.3-0.6
-            "P": 0.75,   # 0.5-1
-            "Fb": 0.4,   # 0.3-0.5
-            "Fd": 0.4,   # assume same as Fb
-            "Lt": 0.5,   # 0.5
-        }
-        max_heights = {
-            "Sw": 30,  # White spruce
-            "Sb": 20,  # Black spruce
-            "P": 30,   # Pine
-            "Fb": 25,  # Balsam fir
-            "Fd": 40,  # Douglas fir
-            "Lt": 30,  # Larch
-            "Aw": 25,  # Aspen
-            "Pb": 30,  # Balsam poplar
-            "Bw": 20,  # White birch
-        }
-        rate = growth_rates.get(species_code, 0.5)
-        current_date = datetime.date(2025, 10, 1)
-        p3_date = datetime.date(p3_year, p3_month, 1)
-        days_passed = (current_date - p3_date).days
-        years = max(0, days_passed / 365.25)  # Ensure non-negative
-        added_growth = years * rate
-        estimated_height = int(round(p3_height + added_growth))  # Round to whole number
-        # Cap at species-specific maximum height
-        estimated_height = min(estimated_height, max_heights.get(species_code, 40))
-
-        st.markdown(f"""
-        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
-                    background-color:#ECEFF1; color:#000;'>
-          <h4 style='color:#607D8B;'>Estimated Current Height</h4>
-          <p style='font-size:20px; font-weight:bold;'>{estimated_height} m</p>
-        </div>""", unsafe_allow_html=True)
-
-    # ✅ FIX: use subheader for hover help
-    st.subheader(
-        "Tree Height Estimator from Shadows",
-        help="Estimate tree height using shadow length and approximate sun elevation for Northern Alberta (~55°N). Assumes flat ground and noon sun position. Use for formal estimation; adjust for terrain if needed."
-    )
-
-    sun_elevation_by_month = {
-        "Jan": 12, "Feb": 20, "Mar": 32, "Apr": 45, "May": 55, "Jun": 60,
-        "Jul": 55, "Aug": 45, "Sep": 32, "Oct": 20, "Nov": 12, "Dec": 8
-    }
-    shadow_month = st.selectbox("Image Month", list(sun_elevation_by_month.keys()), key="shadow_month")
-    shadow_length = st.number_input("Shadow Length (m)", min_value=0.0, value=10.0, step=0.1, key="shadow_length")
-    measured_height = st.number_input("Measured Height (m, optional)", min_value=0.0, value=0.0, step=0.1, key="measured_height")
-
-    if shadow_month and shadow_length > 0:
-        elev = sun_elevation_by_month[shadow_month]
-        est_height = round(shadow_length * math.tan(math.radians(elev)), 2)
-        display_text = f"<p><b>Month:</b> {shadow_month}</p>"
-        display_text += f"<p><b>Sun Elevation:</b> {elev}°</p>"
-        display_text += f"<p><b>Shadow Length:</b> {shadow_length} m</p>"
-        display_text += f"<p style='font-size:20px; font-weight:bold;'>Estimated Height: {est_height:.2f} m</p>"
-        if measured_height > 0:
-            diff = measured_height - est_height
-            display_text += f"<p><b>Measured Height:</b> {measured_height} m (Δ {diff:+.2f} m)</p>"
-
-        st.markdown(f"""
-        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
-                    background-color:#ECEFF1; color:#000;'>
-          <h4 style='color:#607D8B;'>Estimated Height from Shadow</h4>
-          {display_text}
-        </div>""", unsafe_allow_html=True)
 
 # --- Show totals ---
 if st.button("Finish (Show Totals)", key="finish_totals"):
@@ -649,6 +588,26 @@ if st.session_state.show_salvage_form:
         key="salvage_waiver",
         help="Use when timber is uneconomic to salvage, such as less than 0.5 truckloads. This allows legal on-site destruction of merchantable wood. Also applies to isolated decks on larger projects. Contact Alberta Forestry for guidance, as waiver rules vary by region and FMA."
     )
+
+    # --- NEW: Show Total Coniferous/Deciduous Load boxes directly under waiver question ---
+    total_c_load_ui = sum(e["C_Load"] for e in st.session_state.results_log if e.get("C_Load") is not None)
+    total_d_load_ui = sum(e["D_Load"] for e in st.session_state.results_log if e.get("D_Load") is not None)
+
+    col_load1, col_load2 = st.columns(2)
+    with col_load1:
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Total Coniferous Load</h4>
+          <p style='font-size:20px; font-weight:bold;'>{total_c_load_ui:.5f}</p>
+        </div>""", unsafe_allow_html=True)
+    with col_load2:
+        st.markdown(f"""
+        <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
+                    background-color:#ECEFF1; color:#000;'>
+          <h4 style='color:#607D8B;'>Total Deciduous Load</h4>
+          <p style='font-size:20px; font-weight:bold;'>{total_d_load_ui:.5f}</p>
+        </div>""", unsafe_allow_html=True)
 
     # ✅ NEW FEATURE: Autofill waiver justification when "Yes" is selected (without overwriting user edits)
     DEFAULT_WAIVER_JUSTIFICATION = "Timber salvage is not considered economically viable, given that the estimated volume is below 0.5 truckloads."
@@ -1118,4 +1077,3 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
-
