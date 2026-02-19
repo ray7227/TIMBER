@@ -330,14 +330,14 @@ with col1:
     dom_species = dom_sel.split(" ")[0]
     st.session_state.dom_species = dom_species
 
-    # --- Keep dom/sec sliders locked to sum = 100 (both directions) ---
+    # --- Dominant/2nd cover sliders locked to sum = 100 (both directions) ---
+    # NOTE: do not directly assign st.session_state.dom_cover_temp / sec_cover_temp anywhere.
     def sync_from_dom():
         st.session_state.sec_cover_temp = 100 - st.session_state.dom_cover_temp
 
     def sync_from_sec():
         st.session_state.dom_cover_temp = 100 - st.session_state.sec_cover_temp
 
-    # Dominant Cover % slider
     st.slider(
         "Dominant Cover %",
         0, 100,
@@ -357,7 +357,6 @@ with col1:
     sec_species = sec_sel.split(" ")[0] if sec_sel else ""
     st.session_state.sec_species = sec_species
 
-    # 2nd Cover % slider
     st.slider(
         "2nd Cover %",
         0, 100,
@@ -367,7 +366,6 @@ with col1:
         on_change=sync_from_sec
     )
 
-    # Use the widget values as the authoritative cover values
     dom_cover = int(st.session_state.dom_cover_temp)
     sec_cover = int(st.session_state.sec_cover_temp)
     st.session_state.dom_cover = dom_cover
@@ -431,24 +429,19 @@ with col2:
     </div>""", unsafe_allow_html=True)
 
     # --- P3 Map Search Converter ---
-    # Function to convert LSD to P3 map search format
     def convert_lsd_to_p3(lsd):
-        # Regular expression to match LSD format: e.g., NE-20-48-11-W5 or se-29-48-11-w5
         pattern = r'^(?:[A-Za-z]{2}-)?\d{1,2}-\d{1,3}-\d{1,2}-[Ww](\d)$'
         match = re.match(pattern, lsd.strip(), re.IGNORECASE)
         if match:
-            meridian = match.group(1)  # Last group is the meridian number
+            meridian = match.group(1)
             parts = lsd.strip().replace(" ", "-").split("-")
-            # Extract range and township (last two parts before meridian)
             range_num = parts[-2]
             township = parts[-3]
-            # Pad range to 2 digits and township to 3 digits
             range_padded = range_num.zfill(2)
             township_padded = township.zfill(3)
             return f"P3:{meridian}{range_padded}{township_padded}*"
         return None
 
-    # ✅ FIX: st.markdown does NOT support help=. Use Streamlit header/subheader for tooltip.
     st.subheader(
         "P3 Map Search Converter",
         help="Enter one or more LSDs (e.g., NE-20-48-11-W5) in the text area below, one per line. The output will show the SharePoint P3 map search format (P3:MRRTTT*)."
@@ -461,9 +454,7 @@ with col2:
         label_visibility="collapsed"
     )
 
-    # Process input and display output below Load box
     if lsd_input:
-        # Split input by spaces or newlines
         lsds = [lsd.strip() for lsd in lsd_input.replace("\n", " ").split()]
         results = [convert_lsd_to_p3(lsd) for lsd in lsds if convert_lsd_to_p3(lsd)]
         if results:
@@ -527,7 +518,6 @@ if st.session_state.show_salvage_form:
         help="Broad description of what is on the project footprint. Most notable would be to use aerial imagery and field notes to determine if project is within regen/planted area. Plantations typically long straight rows of trees."
     )
 
-    # Show text input for "Other (specify)" details if selected
     other_specify_details = ""
     if "Other (specify)" in vegetation:
         other_specify_details = st.text_input("Other (specify):", key="other_specify_details")
@@ -570,7 +560,7 @@ if st.session_state.show_salvage_form:
         help="Use when timber is uneconomic to salvage, such as less than 0.5 truckloads. This allows legal on-site destruction of merchantable wood. Also applies to isolated decks on larger projects. Contact Alberta Forestry for guidance, as waiver rules vary by region and FMA."
     )
 
-    # --- NEW: boxes under waiver showing Total C_Load and Total D_Load ---
+    # --- NEW: Total Load boxes under waiver (UI only) ---
     total_c_load_ui = sum(e["C_Load"] for e in st.session_state.results_log if e.get("C_Load") is not None)
     total_d_load_ui = sum(e["D_Load"] for e in st.session_state.results_log if e.get("D_Load") is not None)
 
@@ -844,7 +834,7 @@ if st.session_state.show_salvage_form:
 
         # Handle multiple CTLR entries
         for i, ctlr in enumerate(st.session_state.ctlr_list):
-            if ctlr["type"].strip() or ctlr["number_holder"].strip():  # Only include non-empty entries
+            if ctlr["type"].strip() or ctlr["number_holder"].strip():
                 p = doc.add_paragraph(); p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(0)
                 run = p.add_run(f"\tDisposition number & Holder name of {ctlr['type']}: ")
                 run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = True
@@ -895,7 +885,6 @@ if st.session_state.show_salvage_form:
             run = p.add_run(justification)
             run.font.name = "Times New Roman"; run.font.size = Pt(10); run.font.bold = False; run.font.underline = True
 
-        # Use disposition input for filename, with a fallback if empty
         filename = f"Timber_{disposition if disposition.strip() else 'Report'}.docx"
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
@@ -925,7 +914,6 @@ if st.button("Reset All Entries"):
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop zip files containing shapefiles to dissolve polygons individually.")
 
-# File uploader for drag-and-drop
 uploaded_files = st.sidebar.file_uploader(
     "Upload .zip files", 
     type=["zip"], 
@@ -933,20 +921,16 @@ uploaded_files = st.sidebar.file_uploader(
     help="Select or drag and drop .zip files containing shapefiles."
 )
 
-# Create a temporary directory for processing
 temp_base_dir = Path(tempfile.mkdtemp())
 output_dir = temp_base_dir / "dissolved_output"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# Log file for debugging
 log_file = output_dir / "processing_log.txt"
 with open(log_file, "w") as log:
     log.write("Processing started\n")
 
-# Process uploaded files
 if uploaded_files:
     for uploaded_file in uploaded_files:
-        # Save uploaded .zip file to temporary directory
         zip_path = temp_base_dir / uploaded_file.name
         with open(zip_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
@@ -955,21 +939,17 @@ if uploaded_files:
             log.write(f"\nProcessing {zip_path.name}...\n")
             st.sidebar.write(f"Processing {zip_path.name}...")
 
-            # Create subfolder for this specific zip
             zip_subdir = output_dir / zip_path.stem
             zip_subdir.mkdir(exist_ok=True)
 
-            # Temporary extraction folder
             temp_dir = temp_base_dir / f"temp_{zip_path.stem}"
             temp_dir.mkdir(exist_ok=True)
 
             try:
-                # Extract all contents
                 with zipfile.ZipFile(zip_path, "r") as z:
                     z.extractall(temp_dir)
                 log.write(f"Extracted {zip_path.name} to {temp_dir}\n")
 
-                # Find shapefiles
                 shapefiles = list(temp_dir.glob("*.shp"))
                 if not shapefiles:
                     log.write(f"No shapefiles found in {zip_path.name}, skipping.\n")
@@ -980,7 +960,6 @@ if uploaded_files:
                     log.write(f"Warning: Multiple shapefiles found in {zip_path.name}. Processing only: {shapefiles[0]}\n")
                     st.sidebar.warning(f"Warning: Multiple shapefiles found. Using: {shapefiles[0]}")
 
-                # Load the shapefile
                 try:
                     gdf = gpd.read_file(shapefiles[0])
                     log.write(f"Loaded shapefile: {shapefiles[0]}\n")
@@ -989,30 +968,26 @@ if uploaded_files:
                     st.sidebar.error(f"Error reading {shapefiles[0]}: {str(e)}")
                     continue
 
-                # Check for polygon geometries
                 if not gdf.geometry.type.str.contains("Polygon|MultiPolygon").any():
                     log.write(f"Shapefile {shapefiles[0]} contains no polygons, skipping.\n")
                     st.sidebar.warning(f"Shapefile {shapefiles[0]} contains no polygons, skipping.")
                     continue
 
-                # Fix invalid geometries
-                gdf["geometry"] = gdf.geometry.buffer(0)  # Attempt to fix invalid geometries
+                gdf["geometry"] = gdf.geometry.buffer(0)
                 if gdf.geometry.is_valid.all():
                     log.write("All geometries are valid after buffering.\n")
                 else:
                     log.write("Warning: Some geometries are still invalid after buffering.\n")
                     st.sidebar.warning("Warning: Some geometries are invalid.")
 
-                # Dissolve all polygons into a single geometry
                 try:
-                    dissolved_gdf = gdf.dissolve()  # Dissolve all into one polygon
+                    dissolved_gdf = gdf.dissolve()
                     log.write("Dissolve operation successful.\n")
                 except Exception as e:
                     log.write(f"Error during dissolve: {str(e)}\n")
                     st.sidebar.error(f"Error during dissolve: {str(e)}")
                     continue
 
-                # Save the dissolved shapefile in the subfolder
                 out_file = zip_subdir / f"{zip_path.stem}_dissolved.shp"
                 try:
                     dissolved_gdf.to_file(out_file)
@@ -1023,19 +998,16 @@ if uploaded_files:
                     st.sidebar.error(f"Error saving {out_file}: {str(e)}")
 
             finally:
-                # Cleanup temporary folder
                 if temp_dir.exists():
                     shutil.rmtree(temp_dir)
                     log.write(f"Cleaned up {temp_dir}\n")
 
-    # Zip the entire output directory for download
     output_zip_path = temp_base_dir / "dissolved_shapefiles.zip"
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(output_dir):
             for file in files:
                 zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), output_dir))
 
-    # Provide download link for the zipped outputs
     with open(output_zip_path, "rb") as f:
         st.sidebar.download_button(
             label="Download All Dissolved Shapefiles (Zip)",
@@ -1044,7 +1016,6 @@ if uploaded_files:
             mime="application/zip"
         )
 
-    # Provide download link for the log file
     with open(log_file, "rb") as f:
         st.sidebar.download_button(
             label="Download Processing Log",
@@ -1055,6 +1026,5 @@ if uploaded_files:
     
     st.sidebar.success("🎉 All zip files processed.")
 
-# Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
