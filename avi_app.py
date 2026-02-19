@@ -330,44 +330,22 @@ with col1:
     dom_species = dom_sel.split(" ")[0]
     st.session_state.dom_species = dom_species
 
-    # --- NEW: keep dom/sec sliders locked to sum = 100 (both directions) ---
-    if "_syncing_cover" not in st.session_state:
-        st.session_state._syncing_cover = False
-    if "dom_cover_temp" not in st.session_state:
-        st.session_state.dom_cover_temp = st.session_state.dom_cover
-    if "sec_cover_temp" not in st.session_state:
-        st.session_state.sec_cover_temp = st.session_state.sec_cover
-
+    # --- Keep dom/sec sliders locked to sum = 100 (both directions) ---
     def sync_from_dom():
-        if st.session_state._syncing_cover:
-            return
-        st.session_state._syncing_cover = True
-        st.session_state.dom_cover = st.session_state.dom_cover_temp
-        st.session_state.sec_cover = 100 - st.session_state.dom_cover_temp
-        st.session_state.sec_cover_temp = st.session_state.sec_cover
-        st.session_state._syncing_cover = False
+        st.session_state.sec_cover_temp = 100 - st.session_state.dom_cover_temp
 
     def sync_from_sec():
-        if st.session_state._syncing_cover:
-            return
-        st.session_state._syncing_cover = True
-        st.session_state.sec_cover = st.session_state.sec_cover_temp
-        st.session_state.dom_cover = 100 - st.session_state.sec_cover_temp
-        st.session_state.dom_cover_temp = st.session_state.dom_cover
-        st.session_state._syncing_cover = False
+        st.session_state.dom_cover_temp = 100 - st.session_state.sec_cover_temp
 
     # Dominant Cover % slider
-    dom_cover = st.slider(
+    st.slider(
         "Dominant Cover %",
         0, 100,
-        st.session_state.dom_cover,
+        value=st.session_state.get("dom_cover_temp", st.session_state.dom_cover),
         step=10,
         key="dom_cover_temp",
         on_change=sync_from_dom
     )
-    st.session_state.dom_cover = dom_cover
-    st.session_state.sec_cover = 100 - dom_cover
-    st.session_state.sec_cover_temp = st.session_state.sec_cover
 
     sec_opts = [""] + [c for c in species_choices if c.split(" ")[0] != dom_species]
     sec_sel = st.selectbox(
@@ -380,17 +358,20 @@ with col1:
     st.session_state.sec_species = sec_species
 
     # 2nd Cover % slider
-    sec_cover = st.slider(
+    st.slider(
         "2nd Cover %",
         0, 100,
-        st.session_state.sec_cover,
+        value=st.session_state.get("sec_cover_temp", st.session_state.sec_cover),
         step=10,
         key="sec_cover_temp",
         on_change=sync_from_sec
     )
+
+    # Use the widget values as the authoritative cover values
+    dom_cover = int(st.session_state.dom_cover_temp)
+    sec_cover = int(st.session_state.sec_cover_temp)
+    st.session_state.dom_cover = dom_cover
     st.session_state.sec_cover = sec_cover
-    st.session_state.dom_cover = 100 - sec_cover
-    st.session_state.dom_cover_temp = st.session_state.dom_cover
 
     area = st.number_input(
         "Area (ha)",
@@ -589,7 +570,7 @@ if st.session_state.show_salvage_form:
         help="Use when timber is uneconomic to salvage, such as less than 0.5 truckloads. This allows legal on-site destruction of merchantable wood. Also applies to isolated decks on larger projects. Contact Alberta Forestry for guidance, as waiver rules vary by region and FMA."
     )
 
-    # --- NEW: Show Total Coniferous/Deciduous Load boxes directly under waiver question ---
+    # --- NEW: boxes under waiver showing Total C_Load and Total D_Load ---
     total_c_load_ui = sum(e["C_Load"] for e in st.session_state.results_log if e.get("C_Load") is not None)
     total_d_load_ui = sum(e["D_Load"] for e in st.session_state.results_log if e.get("D_Load") is not None)
 
@@ -605,7 +586,7 @@ if st.session_state.show_salvage_form:
         st.markdown(f"""
         <div style='padding:1em; border:2px solid #607D8B; border-radius:12px;
                     background-color:#ECEFF1; color:#000;'>
-          <h4 style='color:#607D8B;'>Total Deciduous Load</h4>
+          <h4 style='color:#607D8B;'>Total Decidious Load</h4>
           <p style='font-size:20px; font-weight:bold;'>{total_d_load_ui:.5f}</p>
         </div>""", unsafe_allow_html=True)
 
