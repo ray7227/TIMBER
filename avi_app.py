@@ -979,6 +979,16 @@ if uploaded_files:
                 try:
                     gdf = gpd.read_file(shapefiles[0])
                     gdf = gdf.explode(ignore_index=True)  # Split MultiPolygon into single Polygon features
+                    # --- Add Area_Ha field ---
+if gdf.crs is None:
+    st.sidebar.warning("⚠️ CRS is missing. Area_Ha may be incorrect.")
+else:
+    if getattr(gdf.crs, "is_geographic", False):
+        gdf_area = gdf.to_crs(epsg=3347)  # Canada Lambert (meters)
+    else:
+        gdf_area = gdf
+
+    gdf["Area_Ha"] = (gdf_area.geometry.area / 10000).round(4)
                     log.write(f"Loaded shapefile: {shapefiles[0]}\n")
                 except Exception as e:
                     log.write(f"Error reading {shapefiles[0]}: {str(e)}\n")
@@ -1054,4 +1064,5 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
 
