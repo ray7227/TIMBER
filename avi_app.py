@@ -920,7 +920,6 @@ if st.button("Reset All Entries"):
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop zip files containing shapefiles to dissolve polygons individually.")
 
-# File uploader for drag-and-drop
 uploaded_files = st.sidebar.file_uploader(
     "Upload .zip files", 
     type=["zip"], 
@@ -928,20 +927,17 @@ uploaded_files = st.sidebar.file_uploader(
     help="Select or drag and drop .zip files containing shapefiles."
 )
 
-# Create a temporary directory for processing
 temp_base_dir = Path(tempfile.mkdtemp())
 output_dir = temp_base_dir / "dissolved_output"
 output_dir.mkdir(parents=True, exist_ok=True)
 
-# Log file for debugging
 log_file = output_dir / "processing_log.txt"
 with open(log_file, "w") as log:
     log.write("Processing started\n")
 
-# Process uploaded files
 if uploaded_files:
     for uploaded_file in uploaded_files:
-        # Save uploaded .zip file to temporary directory
+
         zip_path = temp_base_dir / uploaded_file.name
         with open(zip_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
@@ -950,21 +946,17 @@ if uploaded_files:
             log.write(f"\nProcessing {zip_path.name}...\n")
             st.sidebar.write(f"Processing {zip_path.name}...")
 
-            # Create subfolder for this specific zip
             zip_subdir = output_dir / zip_path.stem
             zip_subdir.mkdir(exist_ok=True)
 
-            # Temporary extraction folder
             temp_dir = temp_base_dir / f"temp_{zip_path.stem}"
             temp_dir.mkdir(exist_ok=True)
 
             try:
-                # Extract all contents
                 with zipfile.ZipFile(zip_path, "r") as z:
                     z.extractall(temp_dir)
                 log.write(f"Extracted {zip_path.name} to {temp_dir}\n")
 
-                # Find shapefiles
                 shapefiles = list(temp_dir.glob("*.shp"))
                 if not shapefiles:
                     log.write(f"No shapefiles found in {zip_path.name}, skipping.\n")
@@ -972,93 +964,76 @@ if uploaded_files:
                     continue
 
                 if len(shapefiles) > 1:
-                    log.write(f"Warning: Multiple shapefiles found in {zip_path.name}. Processing only: {shapefiles[0]}\n")
+                    log.write(f"Warning: Multiple shapefiles found. Using: {shapefiles[0]}\n")
                     st.sidebar.warning(f"Warning: Multiple shapefiles found. Using: {shapefiles[0]}")
-                    
+
+                # READ FILE
                 gdf = gpd.read_file(shapefiles[0])
-gdf = gdf.explode(ignore_index=True)  # Split MultiPolygon into single Polygon features
 
-# --- ADD AREA_HA FIELD ---
-try:
-    if gdf.crs is None:
-        log.write("CRS missing — Area_Ha may be incorrect.\n")
-        st.sidebar.warning("CRS missing — Area_Ha may be incorrect.")
-    else:
-        # If geographic (lat/long), reproject to metric CRS for area calculation
-        if getattr(gdf.crs, "is_geographic", False):
-            gdf_area = gdf.to_crs(epsg=3347)  # Canada Lambert (meters)
-        else:
-            gdf_area = gdf
+                # SPLIT MULTIPART
+                gdf = gdf.explode(ignore_index=True)
 
-        gdf["Area_Ha"] = (gdf_area.geometry.area / 10000).round(4)
-        log.write("Area_Ha field added successfully.\n")
+                # ADD AREA_HA
+                try:
+                    if gdf.crs is None:
+                        log.write("CRS missing — Area_Ha may be incorrect.\n")
+                        st.sidebar.warning("CRS missing — Area_Ha may be incorrect.")
+                    else:
+                        if getattr(gdf.crs, "is_geographic", False):
+                            gdf_area = gdf.to_crs(epsg=3347)
+                        else:
+                            gdf_area = gdf
 
-except Exception as e:
-    log.write(f"Error calculating Area_Ha: {str(e)}\n")
-    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
+                        gdf["Area_Ha"] = (gdf_area.geometry.area / 10000).round(4)
+                        log.write("Area_Ha field added successfully.\n")
 
-log.write(f"Loaded shapefile: {shapefiles[0]}\n")
                 except Exception as e:
-                    log.write(f"Error reading {shapefiles[0]}: {str(e)}\n")
-                    st.sidebar.error(f"Error reading {shapefiles[0]}: {str(e)}")
-                    continue
+                    log.write(f"Error calculating Area_Ha: {str(e)}\n")
+                    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
 
-                # Check for polygon geometries
+                log.write(f"Loaded shapefile: {shapefiles[0]}\n")
+
                 if not gdf.geometry.type.str.contains("Polygon|MultiPolygon").any():
-                    log.write(f"Shapefile {shapefiles[0]} contains no polygons, skipping.\n")
-                    st.sidebar.warning(f"Shapefile {shapefiles[0]} contains no polygons, skipping.")
+                    log.write("No polygon geometries found.\n")
+                    st.sidebar.warning("No polygon geometries found.")
                     continue
 
-                # Fix invalid geometries
-                gdf["geometry"] = gdf.geometry.buffer(0)  # Attempt to fix invalid geometries
-                if gdf.geometry.is_valid.all():
-                    log.write("All geometries are valid after buffering.\n")
-                else:
-                    log.write("Warning: Some geometries are still invalid after buffering.\n")
-                    st.sidebar.warning("Warning: Some geometries are invalid.")
+                gdf["geometry"] = gdf.geometry.buffer(0)
 
-                # Dissolve all polygons into a single geometry
-                try:
-                    dissolved_gdf = gdf  # Keep as singlepart features (no dissolve)
-                    log.write("Dissolve operation successful.\n")
-                except Exception as e:
-                    log.write(f"Error during dissolve: {str(e)}\n")
-                    st.sidebar.error(f"Error during dissolve: {str(e)}")
-                    continue
+                dissolved_gdf = gdf  # keep singlepart
 
-                # Save the dissolved shapefile in the subfolder
                 out_file = zip_subdir / f"{zip_path.stem}_singlepart.shp"
-                try:
-                    dissolved_gdf.to_file(out_file)
-                    log.write(f"Saved dissolved shapefile: {out_file}\n")
-                    st.sidebar.success(f"✅ Saved dissolved shapefile: {out_file}")
-                except Exception as e:
-                    log.write(f"Error saving {out_file}: {str(e)}\n")
-                    st.sidebar.error(f"Error saving {out_file}: {str(e)}")
+
+                dissolved_gdf.to_file(out_file)
+                log.write(f"Saved shapefile: {out_file}\n")
+                st.sidebar.success(f"✅ Saved shapefile: {out_file}")
+
+            except Exception as e:
+                log.write(f"Error processing {zip_path.name}: {str(e)}\n")
+                st.sidebar.error(f"Error processing {zip_path.name}: {str(e)}")
 
             finally:
-                # Cleanup temporary folder
                 if temp_dir.exists():
                     shutil.rmtree(temp_dir)
                     log.write(f"Cleaned up {temp_dir}\n")
 
-    # Zip the entire output directory for download
     output_zip_path = temp_base_dir / "dissolved_shapefiles.zip"
     with zipfile.ZipFile(output_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(output_dir):
             for file in files:
-                zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), output_dir))
+                zipf.write(
+                    os.path.join(root, file),
+                    os.path.relpath(os.path.join(root, file), output_dir)
+                )
 
-    # Provide download link for the zipped outputs
     with open(output_zip_path, "rb") as f:
         st.sidebar.download_button(
-            label="Download All Dissolved Shapefiles (Zip)",
+            label="Download All Shapefiles (Zip)",
             data=f,
             file_name="dissolved_shapefiles.zip",
             mime="application/zip"
         )
 
-    # Provide download link for the log file
     with open(log_file, "rb") as f:
         st.sidebar.download_button(
             label="Download Processing Log",
@@ -1066,10 +1041,9 @@ log.write(f"Loaded shapefile: {shapefiles[0]}\n")
             file_name=log_file.name,
             mime="text/plain"
         )
-    
+
     st.sidebar.success("🎉 All zip files processed.")
 
-# Cleanup temporary base directory when done
-if temp_base_dir.exists():
-    shutil.rmtree(temp_base_dir)
-
+# IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
+# if temp_base_dir.exists():
+#     shutil.rmtree(temp_base_dir)
