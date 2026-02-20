@@ -568,21 +568,19 @@ if st.session_state.show_salvage_form:
     total_c_load_display = sum(e["C_Load"] for e in st.session_state.results_log if e.get("C_Load") is not None)
     total_d_load_display = sum(e["D_Load"] for e in st.session_state.results_log if e.get("D_Load") is not None)
 
-    col_load1, col_load2 = st.columns(2)
-    with col_load1:
-        st.markdown(f"""
-        <div style='padding:1em; border:2px solid #9C27B0; border-radius:12px;
-                    background-color:#f3e5f5; color:#000;'>
-            <h4 style='color:#9C27B0;'>Total Coniferous Load</h4>
-            <p style='font-size:20px; font-weight:bold;'>{total_c_load_display:.5f}</p>
-        </div>""", unsafe_allow_html=True)
-    with col_load2:
-        st.markdown(f"""
-        <div style='padding:1em; border:2px solid #9C27B0; border-radius:12px;
-                    background-color:#f3e5f5; color:#000;'>
-            <h4 style='color:#9C27B0;'>Total Deciduous Load</h4>
-            <p style='font-size:20px; font-weight:bold;'>{total_d_load_display:.5f}</p>
-        </div>""", unsafe_allow_html=True)
+       st.markdown(f"""
+    <div style='padding:6px 10px;
+                border:1.5px solid #9C27B0;
+                border-radius:8px;
+                background-color:#f3e5f5;
+                color:#000;
+                display:inline-block;
+                font-size:13px;
+                line-height:1.4;'>
+        <b>Total Deciduous Load:</b> {total_d_load_display:.5f}<br>
+        <b>Total Coniferous Load:</b> {total_c_load_display:.5f}
+    </div>
+    """, unsafe_allow_html=True)
 
     # ✅ NEW FEATURE: Autofill waiver justification when "Yes" is selected (without overwriting user edits)
     DEFAULT_WAIVER_JUSTIFICATION = "Timber salvage is not considered economically viable, given that the estimated volume is below 0.5 truckloads."
@@ -1052,3 +1050,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
