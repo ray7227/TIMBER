@@ -978,6 +978,7 @@ if uploaded_files:
                 # Load the shapefile
                 try:
                     gdf = gpd.read_file(shapefiles[0])
+                    gdf = gdf.explode(ignore_index=True)  # Split MultiPolygon into single Polygon features
                     log.write(f"Loaded shapefile: {shapefiles[0]}\n")
                 except Exception as e:
                     log.write(f"Error reading {shapefiles[0]}: {str(e)}\n")
@@ -1000,7 +1001,7 @@ if uploaded_files:
 
                 # Dissolve all polygons into a single geometry
                 try:
-                    dissolved_gdf = gdf.dissolve()  # Dissolve all into one polygon
+                    dissolved_gdf = gdf  # Keep as singlepart features (no dissolve)
                     log.write("Dissolve operation successful.\n")
                 except Exception as e:
                     log.write(f"Error during dissolve: {str(e)}\n")
@@ -1008,7 +1009,7 @@ if uploaded_files:
                     continue
 
                 # Save the dissolved shapefile in the subfolder
-                out_file = zip_subdir / f"{zip_path.stem}_dissolved.shp"
+                out_file = zip_subdir / f"{zip_path.stem}_singlepart.shp"
                 try:
                     dissolved_gdf.to_file(out_file)
                     log.write(f"Saved dissolved shapefile: {out_file}\n")
@@ -1053,3 +1054,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
