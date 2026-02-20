@@ -974,12 +974,30 @@ if uploaded_files:
                 if len(shapefiles) > 1:
                     log.write(f"Warning: Multiple shapefiles found in {zip_path.name}. Processing only: {shapefiles[0]}\n")
                     st.sidebar.warning(f"Warning: Multiple shapefiles found. Using: {shapefiles[0]}")
+                    
+                gdf = gpd.read_file(shapefiles[0])
+gdf = gdf.explode(ignore_index=True)  # Split MultiPolygon into single Polygon features
 
-                # Load the shapefile
-                try:
-                    gdf = gpd.read_file(shapefiles[0])
-                    gdf = gdf.explode(ignore_index=True)  # Split MultiPolygon into single Polygon features
-                    log.write(f"Loaded shapefile: {shapefiles[0]}\n")
+# --- ADD AREA_HA FIELD ---
+try:
+    if gdf.crs is None:
+        log.write("CRS missing — Area_Ha may be incorrect.\n")
+        st.sidebar.warning("CRS missing — Area_Ha may be incorrect.")
+    else:
+        # If geographic (lat/long), reproject to metric CRS for area calculation
+        if getattr(gdf.crs, "is_geographic", False):
+            gdf_area = gdf.to_crs(epsg=3347)  # Canada Lambert (meters)
+        else:
+            gdf_area = gdf
+
+        gdf["Area_Ha"] = (gdf_area.geometry.area / 10000).round(4)
+        log.write("Area_Ha field added successfully.\n")
+
+except Exception as e:
+    log.write(f"Error calculating Area_Ha: {str(e)}\n")
+    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
+
+log.write(f"Loaded shapefile: {shapefiles[0]}\n")
                 except Exception as e:
                     log.write(f"Error reading {shapefiles[0]}: {str(e)}\n")
                     st.sidebar.error(f"Error reading {shapefiles[0]}: {str(e)}")
@@ -1054,3 +1072,4 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
+
