@@ -285,6 +285,7 @@ with col_nav3:
 # --- Inputs & AVI calculation ---
 col1, col2 = st.columns(2)
 
+# --- NEW: synced sliders so Dom + Sec = 100 ---
 def _sync_from_dom():
     st.session_state.sec_cover = 100 - int(st.session_state.dom_cover)
 
@@ -337,7 +338,7 @@ with col1:
     dom_species = dom_sel.split(" ")[0]
     st.session_state.dom_species = dom_species
     
-    # Dominant Cover % slider (synced so Dom + Sec = 100)
+    # Dominant Cover % slider (synced)
     dom_cover = st.slider(
         "Dominant Cover %",
         0, 100,
@@ -357,7 +358,7 @@ with col1:
     sec_species = sec_sel.split(" ")[0] if sec_sel else ""
     st.session_state.sec_species = sec_species
     
-    # 2nd Cover % slider (synced so Dom + Sec = 100)
+    # 2nd Cover % slider (synced)
     sec_cover = st.slider(
         "2nd Cover %",
         0, 100,
@@ -463,6 +464,8 @@ with col2:
         if results:
             st.text("\n".join(results))
 
+    # NOTE: Tree Height Estimator and Tree Height Estimator from Shadows removed as requested.
+
 # --- Show totals ---
 if st.button("Finish (Show Totals)", key="finish_totals"):
     total_c_vol = sum(e["C_Vol"] for e in st.session_state.results_log if e["C_Vol"] is not None)
@@ -564,11 +567,11 @@ if st.session_state.show_salvage_form:
         help="Use when timber is uneconomic to salvage, such as less than 0.5 truckloads. This allows legal on-site destruction of merchantable wood. Also applies to isolated decks on larger projects. Contact Alberta Forestry for guidance, as waiver rules vary by region and FMA."
     )
 
-    # --- NEW: display total loads beneath waiver question ---
+    # --- NEW: compact stacked totals box under waiver question ---
     total_c_load_display = sum(e["C_Load"] for e in st.session_state.results_log if e.get("C_Load") is not None)
     total_d_load_display = sum(e["D_Load"] for e in st.session_state.results_log if e.get("D_Load") is not None)
 
-       st.markdown(f"""
+    st.markdown(f"""
     <div style='padding:6px 10px;
                 border:1.5px solid #9C27B0;
                 border-radius:8px;
@@ -1050,4 +1053,3 @@ if uploaded_files:
 # Cleanup temporary base directory when done
 if temp_base_dir.exists():
     shutil.rmtree(temp_base_dir)
-
