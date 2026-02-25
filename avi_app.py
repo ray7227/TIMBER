@@ -1000,9 +1000,11 @@ if uploaded_files:
 
                 gdf["geometry"] = gdf.geometry.buffer(0)
 
-                dissolved_gdf = gdf  # keep singlepart
+                # --- UPDATED: merge ALL features into ONE polygon feature (dissolve internal boundaries) ---
+                dissolved_geom = gdf.unary_union
+                dissolved_gdf = gpd.GeoDataFrame(geometry=[dissolved_geom], crs=gdf.crs)
 
-                out_file = zip_subdir / f"{zip_path.stem}_singlepart.shp"
+                out_file = zip_subdir / f"{zip_path.stem}_singlepolygon.shp"
 
                 dissolved_gdf.to_file(out_file)
                 log.write(f"Saved shapefile: {out_file}\n")
