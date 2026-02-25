@@ -126,7 +126,7 @@ if st.session_state.reset_trigger:
 # --- Page config ---
 st.set_page_config(layout="wide")
 st.header(
-    "🌲TIMBER🌲: Report Generator",
+    "🌲 TIMBER: AVI/TDA/Report Generator",
     help="Before using this form:\n\n1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n2. Use P3 satellite imagery to divide the footprint into tree stand sections and calculate the area of each polygon\n3. Identify the site LSD, locate the corresponding P3 map, and georeference it to the area using ground control points (GCPs) tied to township corners, then rectify the map\n\nFor this form:\n\nComplete the form step by step for each tree stand. Copy the values from the white boxes on the right into the ArcMap table, and enter \"Y\" if merchantable timber is present. After each stand, click “Save Entry” to save and move to a new entry. Once all stands are complete, click “Finish (Show Totals)” to calculate totals, then “Finish (Fill Salvage Draft)” to populate the final Timber form."
 )
 
@@ -920,6 +920,20 @@ if st.button("Reset All Entries"):
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop zip files containing shapefiles to dissolve polygons individually.")
 
+# --- NEW: metadata inputs for output attribute table ---
+st.sidebar.subheader("Output Attributes")
+project_code = st.sidebar.text_input(
+    "Project Code (Project_Co)",
+    key="project_code_sidebar",
+    help="This value will be written to the output shapefile attribute table as Project_Co."
+)
+add_date = st.sidebar.date_input(
+    "Add Date (Add_Date)",
+    value=datetime.date.today(),
+    key="add_date_sidebar",
+    help="Defaults to today's date. Written to output as YYYY-MM-DD."
+)
+
 uploaded_files = st.sidebar.file_uploader(
     "Upload .zip files", 
     type=["zip"], 
@@ -1004,6 +1018,11 @@ if uploaded_files:
                 dissolved_geom = gdf.unary_union
                 dissolved_gdf = gpd.GeoDataFrame(geometry=[dissolved_geom], crs=gdf.crs)
 
+                # --- NEW: add required attribute fields to the single output feature ---
+                dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
+                dissolved_gdf["Status"] = "1"
+                dissolved_gdf["Project_Co"] = str(project_code).strip()
+
                 out_file = zip_subdir / f"{zip_path.stem}_singlepolygon.shp"
 
                 dissolved_gdf.to_file(out_file)
@@ -1049,4 +1068,3 @@ if uploaded_files:
 # IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
 # if temp_base_dir.exists():
 #     shutil.rmtree(temp_base_dir)
-
