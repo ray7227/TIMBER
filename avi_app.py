@@ -126,7 +126,7 @@ if st.session_state.reset_trigger:
 # --- Page config ---
 st.set_page_config(layout="wide")
 st.header(
-    "🌲 TIMBER: AVI/TDA/Report Generator",
+    "🌲TIMBER🌲: Report Generator",
     help="Before using this form:\n\n1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n2. Use P3 satellite imagery to divide the footprint into tree stand sections and calculate the area of each polygon\n3. Identify the site LSD, locate the corresponding P3 map, and georeference it to the area using ground control points (GCPs) tied to township corners, then rectify the map\n\nFor this form:\n\nComplete the form step by step for each tree stand. Copy the values from the white boxes on the right into the ArcMap table, and enter \"Y\" if merchantable timber is present. After each stand, click “Save Entry” to save and move to a new entry. Once all stands are complete, click “Finish (Show Totals)” to calculate totals, then “Finish (Fill Salvage Draft)” to populate the final Timber form."
 )
 
@@ -1049,3 +1049,4 @@ if uploaded_files:
 # IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
 # if temp_base_dir.exists():
 #     shutil.rmtree(temp_base_dir)
+
