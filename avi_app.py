@@ -150,7 +150,7 @@ if st.session_state.reset_trigger:
 # --- Page config ---
 st.set_page_config(layout="wide")
 st.header(
-    "🌲 TIMBER: AVI/TDA/Report Generator",
+    "🌲TIMBER🌲: Report Generator",
     help=(
         "Before using this form:\n\n"
         "1. Open ArcMap and load the disturbed area .shp file into the Timber layer\n"
@@ -1471,3 +1471,4 @@ if uploaded_files:
 # IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
 # if temp_base_dir.exists():
 #     shutil.rmtree(temp_base_dir)
+
