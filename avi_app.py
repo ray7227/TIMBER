@@ -575,7 +575,7 @@ with col2:
 
     st.subheader(
         "P3 Map Search Converter",
-        help="Enter one or more LSDs (e.g., NE-20-48-11-W5) in the text area below, one per line. The output will show the SharePoint P3 map search format (P3:MRRTTT*)."
+        help="Enter one or more ATS locations (e.g., NE-20-48-11-W5) in the text area below, one per line. The output will show the SharePoint P3 map search format (P3:MRRTTT*)."
     )
 
     lsd_input = st.text_input(
