@@ -479,14 +479,14 @@ with col1:
         step=0.0001,
         format="%.4f",
         key="area",
-        help="Enter the tree stand area (ha) as calculated in ArcMap."
+        help="Enter the tree stand area (ha) as calculated in QGIS."
     )
 
     region = st.selectbox(
         "Natural Region",
         ["Boreal", "Foothills"],
         key="region",
-        help="Input the natural region using the ArcMap layer."
+        help="Input the natural region using the QGIS layer."
     )
 
 
