@@ -150,7 +150,7 @@ if st.session_state.reset_trigger:
 # --- Page config ---
 st.set_page_config(layout="wide")
 st.header(
-    "🌲TIMBER Report Generator🌲",
+    "🌲Timber Damage Assessment Report Generator🌲",
     help=(
         "Before using this form:\n\n"
         "1. Open QGIS Project and load the disturbed area .shp file into the Timber layer\n"
