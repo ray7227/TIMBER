@@ -1321,7 +1321,7 @@ if st.button("Reset All Entries"):
 
 # --- Shapefile Dissolver in Sidebar ---
 st.sidebar.header("Shapefile Dissolver Tool")
-st.sidebar.markdown("Drag and drop zip files containing shapefiles to dissolve polygons individually.")
+st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve them into a single unified feature. This tool merges features that are split by attributes into one.")
 
 # --- NEW: metadata inputs for output attribute table ---
 st.sidebar.subheader("Output Attributes")
