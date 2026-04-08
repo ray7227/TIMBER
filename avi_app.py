@@ -1293,7 +1293,7 @@ if st.session_state.show_salvage_form:
             run.font.bold = False
             run.font.underline = True
 
-        filename = f"Timber_{disposition if disposition.strip() else 'Report'}.docx"
+        filename = f"Timber_Damage_Assessment_{disposition if disposition.strip() else 'Report'}.docx"
         tmp = NamedTemporaryFile(delete=False, suffix=".docx")
         doc.save(tmp.name)
         return tmp.name, filename
