@@ -479,7 +479,7 @@ with col1:
         step=0.0001,
         format="%.4f",
         key="area",
-        help="Enter the tree stand area (ha) as calculated in QGIS."
+        help="Enter the tree stand area (ha) as calculated in QGIS. Formula for QGIS: $area / 10000"
     )
 
     region = st.selectbox(
