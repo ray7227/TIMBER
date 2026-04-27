@@ -668,7 +668,7 @@ if st.session_state.show_salvage_form:
         "Vegetation (check all that apply):",
         veg_types,
         key="vegetation",
-        help="Broad description of what is on the project footprint. Most notable would be to use aerial imagery and field notes to determine if project is within regen/planted area. Plantations typically long straight rows of trees."
+        help="Broad description of the project footprint, informed by aerial imagery and field observations. This includes identifying whether the project is located within a regeneration or planted area, which are typically characterized by long, straight rows of trees. The Plans report will also provide additional detail on footprint features, including wetlands and other relevant environmental constraints."
     )
 
     other_specify_details = ""
