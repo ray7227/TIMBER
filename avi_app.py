@@ -16,6 +16,7 @@ from tempfile import mkdtemp
 import tempfile
 from pathlib import Path
 import datetime
+from urllib.parse import quote_plus
 
 
 # --- Load TDA tables ---
@@ -1320,107 +1321,78 @@ if st.button("Reset All Entries"):
 
 
 
-# --- P3 Map Viewer in Sidebar ---
-st.sidebar.header("P3 Map Viewer")
+
+# --- SharePoint P3 Map Finder in Sidebar ---
+st.sidebar.header("P3 Map Finder")
 st.sidebar.markdown(
-    "Search and preview local P3 PDF maps stored on your computer."
+    "Enter an ATS/LSD location or P3 code, then open the matching search in SharePoint."
 )
 
-DEFAULT_P3_FOLDER = r"C:\Users\rray\OneDrive - Aim Land Services Ltd\Desktop\P3 Maps"
-
-p3_folder_input = st.sidebar.text_input(
-    "P3 Folder Path",
-    value=DEFAULT_P3_FOLDER,
-    key="p3_folder_path_sidebar",
-    help="Paste the exact folder path from File Explorer. Right click the OneDrive folder and choose 'Always keep on this device' if PDFs are cloud-only."
-)
-
-P3_FOLDER = Path(p3_folder_input.strip().strip('"'))
+SHAREPOINT_P3_FOLDER_URL = "https://aimland.sharepoint.com/sites/enviro/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fenviro%2FShared%20Documents%2F%5FTRAINING%20DOCUMENTS%2FTIMBER%2FP3%20Maps&viewid=c3a8e947%2Db321%2D45ec%2D94db%2D2f8cc840aca8"
 
 
-def normalize_p3_search(value):
-    """Clean user input so searches work with ATS converter output or plain P3 map codes."""
-    return (
+def convert_lsd_to_p3_code(value):
+    """Convert ATS/LSD like NE-20-48-11-W5 to P3 code like 511048."""
+    value = str(value).strip()
+    pattern = r"^(?:[A-Za-z]{2}-)?\d{1,2}-\d{1,3}-\d{1,2}-[Ww](\d)$"
+    match = re.match(pattern, value, re.IGNORECASE)
+
+    if not match:
+        return None
+
+    meridian = match.group(1)
+    parts = value.replace(" ", "-").split("-")
+    range_num = parts[-2]
+    township = parts[-3]
+
+    range_padded = range_num.zfill(2)
+    township_padded = township.zfill(3)
+
+    return f"{meridian}{range_padded}{township_padded}"
+
+
+def clean_manual_p3_code(value):
+    """Accept P3:511048*, 511048, or similar typed map code."""
+    cleaned = (
         str(value)
         .replace("P3:", "")
         .replace("p3:", "")
         .replace("*", "")
         .replace(" ", "")
         .strip()
-        .lower()
     )
+    return cleaned if cleaned else None
 
 
-@st.cache_data(show_spinner=False)
-def list_p3_pdfs(folder_path):
-    """Cache the PDF list so Streamlit does not rescan thousands of files every rerun."""
-    folder = Path(folder_path)
-    if not folder.exists() or not folder.is_dir():
-        return []
-    return sorted([str(p) for p in folder.rglob("*.pdf")])
+p3_lookup_input = st.sidebar.text_input(
+    "ATS / LSD or P3 Code",
+    placeholder="NE-20-48-11-W5 or P3:511048*",
+    key="sharepoint_p3_lookup_input",
+    help="Use ATS/LSD format like NE-20-48-11-W5, or paste a P3 code like P3:511048*."
+)
 
+if p3_lookup_input:
+    converted_code = convert_lsd_to_p3_code(p3_lookup_input)
+    p3_code = converted_code if converted_code else clean_manual_p3_code(p3_lookup_input)
 
-def display_pdf_in_sidebar(pdf_path):
-    """Display selected PDF inside the sidebar."""
-    with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
+    if p3_code:
+        p3_search_text = f"P3:{p3_code}*"
+        st.sidebar.success(f"Search code: {p3_search_text}")
 
-    pdf_display = f"""
-        <iframe
-            src="data:application/pdf;base64,{base64_pdf}"
-            width="100%"
-            height="650px"
-            type="application/pdf">
-        </iframe>
-    """
-    st.sidebar.markdown(pdf_display, unsafe_allow_html=True)
+        # SharePoint search in the P3 Maps folder. Opens in a new browser tab.
+        sharepoint_search_url = f"{SHAREPOINT_P3_FOLDER_URL}&q={quote_plus(p3_code)}"
 
+        st.sidebar.link_button(
+            "Open P3 Map Search in SharePoint",
+            sharepoint_search_url,
+            use_container_width=True
+        )
 
-st.sidebar.caption(f"Looking for: {P3_FOLDER}")
-
-if not P3_FOLDER.exists():
-    st.sidebar.error("P3 folder not found. Paste the exact folder path from File Explorer.")
-elif not P3_FOLDER.is_dir():
-    st.sidebar.error("P3 path exists, but it is not a folder.")
-else:
-    p3_pdfs = list_p3_pdfs(str(P3_FOLDER))
-    st.sidebar.success("P3 folder connected")
-    st.sidebar.caption(f"Found {len(p3_pdfs)} PDF maps")
-
-    p3_search = st.sidebar.text_input(
-        "Search P3 map",
-        placeholder="Example: P3:607067* or 607067",
-        key="p3_map_search_sidebar"
-    )
-
-    if p3_search:
-        clean_search = normalize_p3_search(p3_search)
-
-        matches = [
-            Path(pdf_path)
-            for pdf_path in p3_pdfs
-            if clean_search in Path(pdf_path).stem.lower()
-        ]
-
-        if matches:
-            selected_pdf = st.sidebar.selectbox(
-                "Select matching P3 map",
-                matches,
-                format_func=lambda p: p.name,
-                key="selected_p3_pdf_sidebar"
-            )
-
-            st.sidebar.download_button(
-                "Open / Download Selected P3 PDF",
-                data=Path(selected_pdf).read_bytes(),
-                file_name=Path(selected_pdf).name,
-                mime="application/pdf",
-                key="download_selected_p3_pdf_sidebar"
-            )
-
-            display_pdf_in_sidebar(selected_pdf)
-        else:
-            st.sidebar.warning("No matching P3 map found.")
+        st.sidebar.caption(
+            "If SharePoint does not filter automatically, copy the search code above and paste it into the SharePoint search bar."
+        )
+    else:
+        st.sidebar.warning("Could not read that input. Try NE-20-48-11-W5 or P3:511048*.")
 
 st.sidebar.divider()
 
