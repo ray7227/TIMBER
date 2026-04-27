@@ -1319,6 +1319,97 @@ if st.button("Reset All Entries"):
     st.rerun()
 
 
+
+# --- P3 Map Viewer in Sidebar ---
+st.sidebar.header("P3 Map Viewer")
+st.sidebar.markdown(
+    "Search and preview local P3 PDF maps stored on your computer."
+)
+
+P3_FOLDER = Path(r"C:\Users\rray\OneDrive - Aim Land Services Ltd\Desktop\P3 Maps")
+
+
+def normalize_p3_search(value):
+    """Clean user input so searches work with ATS converter output or plain P3 map codes."""
+    return (
+        str(value)
+        .replace("P3:", "")
+        .replace("p3:", "")
+        .replace("*", "")
+        .replace(" ", "")
+        .strip()
+        .lower()
+    )
+
+
+@st.cache_data(show_spinner=False)
+def list_p3_pdfs(folder_path):
+    """Cache the PDF list so Streamlit does not rescan thousands of files every rerun."""
+    folder = Path(folder_path)
+    if not folder.exists():
+        return []
+    return sorted([str(p) for p in folder.rglob("*.pdf")])
+
+
+def display_pdf_in_sidebar(pdf_path):
+    """Display selected PDF inside the sidebar."""
+    with open(pdf_path, "rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
+
+    pdf_display = f"""
+        <iframe
+            src="data:application/pdf;base64,{base64_pdf}"
+            width="100%"
+            height="650px"
+            type="application/pdf">
+        </iframe>
+    """
+    st.sidebar.markdown(pdf_display, unsafe_allow_html=True)
+
+
+if not P3_FOLDER.exists():
+    st.sidebar.warning(f"P3 folder not found: {P3_FOLDER}")
+else:
+    p3_pdfs = list_p3_pdfs(str(P3_FOLDER))
+    st.sidebar.caption(f"Found {len(p3_pdfs)} PDF maps")
+
+    p3_search = st.sidebar.text_input(
+        "Search P3 map",
+        placeholder="Example: P3:607067* or 607067",
+        key="p3_map_search_sidebar"
+    )
+
+    if p3_search:
+        clean_search = normalize_p3_search(p3_search)
+
+        matches = [
+            Path(pdf_path)
+            for pdf_path in p3_pdfs
+            if clean_search in Path(pdf_path).stem.lower()
+        ]
+
+        if matches:
+            selected_pdf = st.sidebar.selectbox(
+                "Select matching P3 map",
+                matches,
+                format_func=lambda p: p.name,
+                key="selected_p3_pdf_sidebar"
+            )
+
+            st.sidebar.download_button(
+                "Open / Download Selected P3 PDF",
+                data=Path(selected_pdf).read_bytes(),
+                file_name=Path(selected_pdf).name,
+                mime="application/pdf",
+                key="download_selected_p3_pdf_sidebar"
+            )
+
+            display_pdf_in_sidebar(selected_pdf)
+        else:
+            st.sidebar.warning("No matching P3 map found.")
+
+st.sidebar.divider()
+
 # --- Shapefile Dissolver in Sidebar ---
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve them into a single unified feature. This tool merges features that are split by attributes into one.")
