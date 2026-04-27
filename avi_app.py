@@ -1326,7 +1326,16 @@ st.sidebar.markdown(
     "Search and preview local P3 PDF maps stored on your computer."
 )
 
-P3_FOLDER = Path(r"C:\Users\rray\OneDrive - Aim Land Services Ltd\Desktop\P3 Maps")
+DEFAULT_P3_FOLDER = r"C:\Users\rray\OneDrive - Aim Land Services Ltd\Desktop\P3 Maps"
+
+p3_folder_input = st.sidebar.text_input(
+    "P3 Folder Path",
+    value=DEFAULT_P3_FOLDER,
+    key="p3_folder_path_sidebar",
+    help="Paste the exact folder path from File Explorer. Right click the OneDrive folder and choose 'Always keep on this device' if PDFs are cloud-only."
+)
+
+P3_FOLDER = Path(p3_folder_input.strip().strip('"'))
 
 
 def normalize_p3_search(value):
@@ -1346,7 +1355,7 @@ def normalize_p3_search(value):
 def list_p3_pdfs(folder_path):
     """Cache the PDF list so Streamlit does not rescan thousands of files every rerun."""
     folder = Path(folder_path)
-    if not folder.exists():
+    if not folder.exists() or not folder.is_dir():
         return []
     return sorted([str(p) for p in folder.rglob("*.pdf")])
 
@@ -1367,10 +1376,15 @@ def display_pdf_in_sidebar(pdf_path):
     st.sidebar.markdown(pdf_display, unsafe_allow_html=True)
 
 
+st.sidebar.caption(f"Looking for: {P3_FOLDER}")
+
 if not P3_FOLDER.exists():
-    st.sidebar.warning(f"P3 folder not found: {P3_FOLDER}")
+    st.sidebar.error("P3 folder not found. Paste the exact folder path from File Explorer.")
+elif not P3_FOLDER.is_dir():
+    st.sidebar.error("P3 path exists, but it is not a folder.")
 else:
     p3_pdfs = list_p3_pdfs(str(P3_FOLDER))
+    st.sidebar.success("P3 folder connected")
     st.sidebar.caption(f"Found {len(p3_pdfs)} PDF maps")
 
     p3_search = st.sidebar.text_input(
