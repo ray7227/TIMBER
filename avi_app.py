@@ -1380,7 +1380,8 @@ if p3_lookup_input:
         st.sidebar.success(f"Search code: {p3_search_text}")
 
         # SharePoint search in the P3 Maps folder. Opens in a new browser tab.
-        sharepoint_search_url = f"{SHAREPOINT_P3_FOLDER_URL}&q={quote_plus(p3_code)}"
+        search_term = f"P3:{p3_code}*"
+        search_url = f"{SHAREPOINT_P3_FOLDER_URL}&q={search_term}"
 
         st.sidebar.link_button(
             "Open P3 Map Search in SharePoint",
