@@ -16,7 +16,7 @@ from tempfile import mkdtemp
 import tempfile
 from pathlib import Path
 import datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote
 
 
 # --- Load TDA tables ---
@@ -1321,81 +1321,74 @@ if st.button("Reset All Entries"):
 
 
 
-
 # --- SharePoint P3 Map Finder in Sidebar ---
 st.sidebar.header("P3 Map Finder")
 st.sidebar.markdown(
-    "Enter an ATS/LSD location or P3 code, then open the matching search in SharePoint."
+    "Enter an ATS/LSD location or P3 code, then open the matching P3 search in SharePoint."
 )
 
+SHAREPOINT_SEARCH_BASE_URL = "https://aimland.sharepoint.com/sites/enviro/_layouts/15/search.aspx/siteall?q="
 SHAREPOINT_P3_FOLDER_URL = "https://aimland.sharepoint.com/sites/enviro/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fenviro%2FShared%20Documents%2F%5FTRAINING%20DOCUMENTS%2FTIMBER%2FP3%20Maps&viewid=c3a8e947%2Db321%2D45ec%2D94db%2D2f8cc840aca8"
 
 
-def convert_lsd_to_p3_code(value):
-    """Convert ATS/LSD like NE-20-48-11-W5 to P3 code like 511048."""
+def convert_lsd_to_p3_sidebar(value):
+    """Convert ATS/LSD input to the P3 search code format MRRTTT."""
     value = str(value).strip()
+
+    # Allow direct P3 code input, for example P3:511048* or 511048
+    direct_match = re.search(r"(?:P3\s*:\s*)?(\d{6})\*?", value, re.IGNORECASE)
+    if direct_match and "-" not in value:
+        return direct_match.group(1)
+
+    # Match ATS/LSD format, for example NE-20-48-11-W5 or 20-48-11-W5
     pattern = r"^(?:[A-Za-z]{2}-)?\d{1,2}-\d{1,3}-\d{1,2}-[Ww](\d)$"
     match = re.match(pattern, value, re.IGNORECASE)
 
-    if not match:
-        return None
+    if match:
+        meridian = match.group(1)
+        parts = value.replace(" ", "-").split("-")
+        range_num = parts[-2]
+        township = parts[-3]
 
-    meridian = match.group(1)
-    parts = value.replace(" ", "-").split("-")
-    range_num = parts[-2]
-    township = parts[-3]
+        range_padded = range_num.zfill(2)
+        township_padded = township.zfill(3)
 
-    range_padded = range_num.zfill(2)
-    township_padded = township.zfill(3)
+        return f"{meridian}{range_padded}{township_padded}"
 
-    return f"{meridian}{range_padded}{township_padded}"
-
-
-def clean_manual_p3_code(value):
-    """Accept P3:511048*, 511048, or similar typed map code."""
-    cleaned = (
-        str(value)
-        .replace("P3:", "")
-        .replace("p3:", "")
-        .replace("*", "")
-        .replace(" ", "")
-        .strip()
-    )
-    return cleaned if cleaned else None
+    return None
 
 
-p3_lookup_input = st.sidebar.text_input(
-    "ATS / LSD or P3 Code",
+p3_sidebar_input = st.sidebar.text_input(
+    "Enter ATS/LSD or P3 code",
     placeholder="NE-20-48-11-W5 or P3:511048*",
-    key="sharepoint_p3_lookup_input",
-    help="Use ATS/LSD format like NE-20-48-11-W5, or paste a P3 code like P3:511048*."
+    key="p3_sidebar_input"
 )
 
-if p3_lookup_input:
-    converted_code = convert_lsd_to_p3_code(p3_lookup_input)
-    p3_code = converted_code if converted_code else clean_manual_p3_code(p3_lookup_input)
+if p3_sidebar_input:
+    p3_code_sidebar = convert_lsd_to_p3_sidebar(p3_sidebar_input)
 
-    if p3_code:
-        p3_search_text = f"P3:{p3_code}*"
+    if p3_code_sidebar:
+        p3_search_text = f"P3:{p3_code_sidebar}*"
+        encoded_search_text = quote(p3_search_text)
+        sharepoint_search_url = f"{SHAREPOINT_SEARCH_BASE_URL}{encoded_search_text}"
+
         st.sidebar.success(f"Search code: {p3_search_text}")
 
-        # SharePoint search in the P3 Maps folder. Opens in a new browser tab.
-        search_term = f"P3:{p3_code}*"
-        search_url = f"{SHAREPOINT_P3_FOLDER_URL}&q={search_term}"
-
         st.sidebar.link_button(
-            "Open P3 Map Search in SharePoint",
+            "Open generated P3 search in SharePoint",
             sharepoint_search_url,
             use_container_width=True
         )
 
+        st.sidebar.markdown(
+            f"[Open P3 Maps folder]({SHAREPOINT_P3_FOLDER_URL})"
+        )
+
         st.sidebar.caption(
-            "If SharePoint does not filter automatically, copy the search code above and paste it into the SharePoint search bar."
+            "The SharePoint search uses the generated P3 code above, not the original ATS/LSD input."
         )
     else:
         st.sidebar.warning("Could not read that input. Try NE-20-48-11-W5 or P3:511048*.")
-
-st.sidebar.divider()
 
 # --- Shapefile Dissolver in Sidebar ---
 st.sidebar.header("Shapefile Dissolver Tool")
