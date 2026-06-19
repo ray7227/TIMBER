@@ -259,8 +259,8 @@ def calculate_avi_and_volumes(
 
         c_vol = round(c_vol_ha * area, 5) if c_vol_ha is not None else 0
         d_vol = round(d_vol_ha * area, 5) if d_vol_ha is not None else 0
-        c_load = round(c_vol / 30, 5) if c_vol is not None else 0
-        d_load = round(d_vol / 30, 5) if d_vol is not None else 0
+        c_load = round(c_vol / 40, 5) if c_vol is not None else 0
+        d_load = round(d_vol / 40, 5) if d_vol is not None else 0
 
     except Exception as e:
         st.error(f"Error reading TDA table: {e}")
