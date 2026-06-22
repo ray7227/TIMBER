@@ -51,8 +51,7 @@ deciduous = {"Aw", "Pb", "Bw"}
 # Put the Alberta Natural Regions/Subregions shapefile files in your repo here:
 # /Regions/regions.shp
 # The Regions folder must also include regions.shx, regions.dbf, regions.prj, regions.cpg, etc.
-REGION_LAYER_PATH = Path(__file__).parent / "Regions" / "regions.shp"
-
+REGION_LAYER_PATH = Path(__file__).parent / "Regions" / "REGIONS.shp"
 
 def _safe_union(geo_series):
     """Works with both older and newer GeoPandas versions."""
