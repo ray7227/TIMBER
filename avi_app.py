@@ -49,9 +49,42 @@ deciduous = {"Aw", "Pb", "Bw"}
 
 # --- Natural Region spatial lookup ---
 # Put the Alberta Natural Regions/Subregions shapefile files in your repo here:
-# /Regions/regions.shp
-# The Regions folder must also include regions.shx, regions.dbf, regions.prj, regions.cpg, etc.
-REGION_LAYER_PATH = Path(__file__).parent / "Regions" / "REGIONS.shp"
+# Regions/
+#   REGIONS.shp
+#   REGIONS.shx
+#   REGIONS.dbf
+#   REGIONS.prj
+#   REGIONS.cpg
+#
+# This loader is case-flexible. It will use REGIONS.shp, regions.shp,
+# or the first .shp it finds inside the Regions folder.
+REGION_LAYER_FOLDER = Path(__file__).resolve().parent / "Regions"
+
+
+def find_region_layer_path():
+    """Find the Natural Regions shapefile in the repo, regardless of filename case."""
+    if not REGION_LAYER_FOLDER.exists():
+        return None
+
+    preferred_names = ["REGIONS.shp", "regions.shp", "Regions.shp"]
+    for name in preferred_names:
+        candidate = REGION_LAYER_FOLDER / name
+        if candidate.exists():
+            return candidate
+
+    shp_files = sorted(REGION_LAYER_FOLDER.glob("*.shp"))
+    if shp_files:
+        return shp_files[0]
+
+    return None
+
+
+def get_region_folder_files():
+    """Small debug helper for Streamlit Cloud path issues."""
+    if not REGION_LAYER_FOLDER.exists():
+        return []
+    return sorted([p.name for p in REGION_LAYER_FOLDER.iterdir()])
+
 
 def _safe_union(geo_series):
     """Works with both older and newer GeoPandas versions."""
@@ -104,27 +137,28 @@ def normalize_tda_region_name(nrname):
     return str(nrname or "").strip()
 
 
-@st.cache_data(show_spinner=False)
 def load_natural_regions_layer():
     """
     Loads the Alberta Natural Regions/Subregions layer from the repo.
-    Expected folder setup:
-    Regions/
-      regions.shp
-      regions.shx
-      regions.dbf
-      regions.prj
-      regions.cpg
 
-    Expected fields include NRNAME for Natural Region and usually NSRNAME for Subregion.
+    Returns:
+        natural_regions_gdf, path_used, error_message
     """
-    if not REGION_LAYER_PATH.exists():
-        return None
+    region_path = find_region_layer_path()
+
+    if region_path is None:
+        files_seen = get_region_folder_files()
+        return (
+            None,
+            "",
+            f"No .shp file found in {REGION_LAYER_FOLDER}. Files seen: {files_seen}"
+        )
 
     try:
-        return gpd.read_file(REGION_LAYER_PATH)
-    except Exception:
-        return None
+        gdf = gpd.read_file(region_path)
+        return gdf, str(region_path), ""
+    except Exception as e:
+        return None, str(region_path), f"{type(e).__name__}: {e}"
 
 
 def get_natural_region_overlap(project_gdf, regions_gdf):
@@ -1585,13 +1619,13 @@ if p3_sidebar_input:
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve them into a single unified feature. This tool merges features that are split by attributes into one.")
 
-natural_regions_gdf = load_natural_regions_layer()
+natural_regions_gdf, natural_regions_path, natural_regions_error = load_natural_regions_layer()
 if natural_regions_gdf is None:
-    st.sidebar.warning(
-        "Natural Regions layer not found. Add Regions/regions.shp and its related shapefile files to the GitHub repo to enable auto-region lookup."
-    )
+    st.sidebar.warning("Natural Regions layer not loaded.")
+    st.sidebar.caption(f"Looking in: {REGION_LAYER_FOLDER}")
+    st.sidebar.caption(natural_regions_error)
 else:
-    st.sidebar.success("Natural Regions layer loaded.")
+    st.sidebar.success(f"Natural Regions layer loaded: {Path(natural_regions_path).name}")
 
 
 # --- NEW: metadata inputs for output attribute table ---
