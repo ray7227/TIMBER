@@ -48,10 +48,10 @@ deciduous = {"Aw", "Pb", "Bw"}
 
 
 # --- Natural Region spatial lookup ---
-# Put the Alberta Natural Regions/Subregions shapefile ZIP in your repo here:
-# /data/natural_subregions_alberta_2005.zip
-# The ZIP should contain the .shp, .shx, .dbf, .prj, etc.
-REGION_LAYER_PATH = Path(__file__).parent / "data" / "natural_subregions_alberta_2005.zip"
+# Put the Alberta Natural Regions/Subregions shapefile files in your repo here:
+# /Regions/regions.shp
+# The Regions folder must also include regions.shx, regions.dbf, regions.prj, regions.cpg, etc.
+REGION_LAYER_PATH = Path(__file__).parent / "Regions" / "regions.shp"
 
 
 def _safe_union(geo_series):
@@ -109,27 +109,23 @@ def normalize_tda_region_name(nrname):
 def load_natural_regions_layer():
     """
     Loads the Alberta Natural Regions/Subregions layer from the repo.
+    Expected folder setup:
+    Regions/
+      regions.shp
+      regions.shx
+      regions.dbf
+      regions.prj
+      regions.cpg
+
     Expected fields include NRNAME for Natural Region and usually NSRNAME for Subregion.
     """
     if not REGION_LAYER_PATH.exists():
         return None
 
     try:
-        return gpd.read_file(f"zip://{REGION_LAYER_PATH}")
+        return gpd.read_file(REGION_LAYER_PATH)
     except Exception:
-        # Fallback: unzip then read the .shp
-        temp_dir = Path(tempfile.mkdtemp())
-        try:
-            with zipfile.ZipFile(REGION_LAYER_PATH, "r") as z:
-                z.extractall(temp_dir)
-
-            shp_files = list(temp_dir.rglob("*.shp"))
-            if not shp_files:
-                return None
-
-            return gpd.read_file(shp_files[0])
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        return None
 
 
 def get_natural_region_overlap(project_gdf, regions_gdf):
@@ -1593,7 +1589,7 @@ st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve t
 natural_regions_gdf = load_natural_regions_layer()
 if natural_regions_gdf is None:
     st.sidebar.warning(
-        "Natural Regions layer not found. Add data/natural_subregions_alberta_2005.zip to the GitHub repo to enable auto-region lookup."
+        "Natural Regions layer not found. Add Regions/regions.shp and its related shapefile files to the GitHub repo to enable auto-region lookup."
     )
 else:
     st.sidebar.success("Natural Regions layer loaded.")
