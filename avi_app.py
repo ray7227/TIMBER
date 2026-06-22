@@ -47,6 +47,202 @@ conifers = {"Sw", "Sb", "P", "Fb", "Fd", "Lt"}
 deciduous = {"Aw", "Pb", "Bw"}
 
 
+# --- Natural Region spatial lookup ---
+# Put the Alberta Natural Regions/Subregions shapefile ZIP in your repo here:
+# /data/natural_subregions_alberta_2005.zip
+# The ZIP should contain the .shp, .shx, .dbf, .prj, etc.
+REGION_LAYER_PATH = Path(__file__).parent / "data" / "natural_subregions_alberta_2005.zip"
+
+
+def _safe_union(geo_series):
+    """Works with both older and newer GeoPandas versions."""
+    try:
+        return geo_series.union_all()
+    except AttributeError:
+        return geo_series.unary_union
+
+
+def _clean_geometries(gdf):
+    """Fix simple invalid geometries and remove empty/null geometries."""
+    gdf = gdf.copy()
+    gdf = gdf[gdf.geometry.notna()]
+    gdf = gdf[~gdf.geometry.is_empty]
+    if gdf.empty:
+        return gdf
+
+    try:
+        gdf["geometry"] = gdf.geometry.make_valid()
+    except Exception:
+        gdf["geometry"] = gdf.geometry.buffer(0)
+
+    gdf = gdf[gdf.geometry.notna()]
+    gdf = gdf[~gdf.geometry.is_empty]
+    return gdf
+
+
+def _find_field(gdf, possible_names):
+    """Find a field ignoring case."""
+    lower_lookup = {c.lower(): c for c in gdf.columns}
+    for name in possible_names:
+        if name.lower() in lower_lookup:
+            return lower_lookup[name.lower()]
+    return None
+
+
+def normalize_tda_region_name(nrname):
+    """
+    Converts Alberta NRNAME text into the simplified TDA table region names used by this app.
+    Add more mappings here if you later add more TDA tables.
+    """
+    text = str(nrname or "").lower()
+
+    if "boreal" in text:
+        return "Boreal"
+    if "foothill" in text:
+        return "Foothills"
+
+    # Outside current TDA options. Keep the original name so you can see it.
+    return str(nrname or "").strip()
+
+
+@st.cache_data(show_spinner=False)
+def load_natural_regions_layer():
+    """
+    Loads the Alberta Natural Regions/Subregions layer from the repo.
+    Expected fields include NRNAME for Natural Region and usually NSRNAME for Subregion.
+    """
+    if not REGION_LAYER_PATH.exists():
+        return None
+
+    try:
+        return gpd.read_file(f"zip://{REGION_LAYER_PATH}")
+    except Exception:
+        # Fallback: unzip then read the .shp
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            with zipfile.ZipFile(REGION_LAYER_PATH, "r") as z:
+                z.extractall(temp_dir)
+
+            shp_files = list(temp_dir.rglob("*.shp"))
+            if not shp_files:
+                return None
+
+            return gpd.read_file(shp_files[0])
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def get_natural_region_overlap(project_gdf, regions_gdf):
+    """
+    Returns the natural region/subregion that has the largest spatial overlap
+    with the uploaded project shapefile.
+    """
+    empty_result = {
+        "region_raw": "",
+        "subregion_raw": "",
+        "tda_region": "",
+        "overlap_ha": 0,
+        "confidence": "Not found",
+        "all_overlaps": pd.DataFrame()
+    }
+
+    if regions_gdf is None or regions_gdf.empty:
+        empty_result["confidence"] = "Region layer missing"
+        return empty_result
+
+    if project_gdf is None or project_gdf.empty:
+        empty_result["confidence"] = "Uploaded layer empty"
+        return empty_result
+
+    if project_gdf.crs is None:
+        empty_result["confidence"] = "Uploaded layer CRS missing"
+        return empty_result
+
+    project = _clean_geometries(project_gdf)
+    regions = _clean_geometries(regions_gdf)
+
+    if project.empty or regions.empty:
+        empty_result["confidence"] = "No valid geometry"
+        return empty_result
+
+    nr_field = _find_field(regions, ["NRNAME", "Natural_Region", "NAT_REGION", "REGION"])
+    nsr_field = _find_field(regions, ["NSRNAME", "Natural_Subregion", "SUBREGION", "NSR_NAME"])
+
+    if nr_field is None:
+        empty_result["confidence"] = "NRNAME field missing"
+        return empty_result
+
+    try:
+        if regions.crs is None:
+            empty_result["confidence"] = "Region layer CRS missing"
+            return empty_result
+
+        if regions.crs != project.crs:
+            regions = regions.to_crs(project.crs)
+
+        project_geom = _safe_union(project.geometry)
+
+        # First filter by intersects in native/project CRS.
+        candidates = regions[regions.geometry.intersects(project_geom)].copy()
+
+        if candidates.empty:
+            empty_result["confidence"] = "No overlap"
+            return empty_result
+
+        # Use a Canada equal-area CRS to calculate overlap area.
+        project_eq = project.to_crs(epsg=3347)
+        candidates_eq = candidates.to_crs(epsg=3347)
+        project_geom_eq = _safe_union(project_eq.geometry)
+
+        overlap_rows = []
+        for idx, row in candidates_eq.iterrows():
+            try:
+                overlap_area_ha = row.geometry.intersection(project_geom_eq).area / 10000
+            except Exception:
+                overlap_area_ha = 0
+
+            if overlap_area_ha > 0:
+                source_row = candidates.loc[idx]
+                region_raw = str(source_row.get(nr_field, "")).strip()
+                subregion_raw = str(source_row.get(nsr_field, "")).strip() if nsr_field else ""
+
+                overlap_rows.append({
+                    "NRNAME": region_raw,
+                    "NSRNAME": subregion_raw,
+                    "Overlap_Ha": round(overlap_area_ha, 4),
+                    "TDARegion": normalize_tda_region_name(region_raw)
+                })
+
+        if not overlap_rows:
+            empty_result["confidence"] = "No measurable overlap"
+            return empty_result
+
+        overlaps = pd.DataFrame(overlap_rows)
+        overlaps = (
+            overlaps
+            .groupby(["NRNAME", "NSRNAME", "TDARegion"], dropna=False, as_index=False)["Overlap_Ha"]
+            .sum()
+            .sort_values("Overlap_Ha", ascending=False)
+        )
+
+        top = overlaps.iloc[0]
+        confidence = "Single region" if len(overlaps) == 1 else "Multiple regions - largest overlap used"
+
+        return {
+            "region_raw": top["NRNAME"],
+            "subregion_raw": top["NSRNAME"],
+            "tda_region": top["TDARegion"],
+            "overlap_ha": float(top["Overlap_Ha"]),
+            "confidence": confidence,
+            "all_overlaps": overlaps
+        }
+
+    except Exception as e:
+        empty_result["confidence"] = f"Error: {e}"
+        return empty_result
+
+
+
 # --- Default values ---
 default_values = {
     "is_merch": "Yes",
@@ -1394,6 +1590,15 @@ if p3_sidebar_input:
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve them into a single unified feature. This tool merges features that are split by attributes into one.")
 
+natural_regions_gdf = load_natural_regions_layer()
+if natural_regions_gdf is None:
+    st.sidebar.warning(
+        "Natural Regions layer not found. Add data/natural_subregions_alberta_2005.zip to the GitHub repo to enable auto-region lookup."
+    )
+else:
+    st.sidebar.success("Natural Regions layer loaded.")
+
+
 # --- NEW: metadata inputs for output attribute table ---
 st.sidebar.subheader("Output Attributes")
 project_code = st.sidebar.text_input(
@@ -1457,41 +1662,78 @@ if uploaded_files:
 
                 # READ FILE
                 gdf = gpd.read_file(shapefiles[0])
-
-                # SPLIT MULTIPART
-                gdf = gdf.explode(ignore_index=True)
-
-                # ADD AREA_HA
-                try:
-                    if gdf.crs is None:
-                        log.write("CRS missing — Area_Ha may be incorrect.\n")
-                        st.sidebar.warning("CRS missing — Area_Ha may be incorrect.")
-                    else:
-                        if getattr(gdf.crs, "is_geographic", False):
-                            gdf_area = gdf.to_crs(epsg=3347)
-                        else:
-                            gdf_area = gdf
-
-                        gdf["Area_Ha"] = (gdf_area.geometry.area / 10000).round(4)
-                        log.write("Area_Ha field added successfully.\n")
-                except Exception as e:
-                    log.write(f"Error calculating Area_Ha: {str(e)}\n")
-                    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
-
                 log.write(f"Loaded shapefile: {shapefiles[0]}\n")
+
+                if gdf.empty:
+                    log.write("Uploaded shapefile is empty.\n")
+                    st.sidebar.warning("Uploaded shapefile is empty.")
+                    continue
 
                 if not gdf.geometry.type.str.contains("Polygon|MultiPolygon").any():
                     log.write("No polygon geometries found.\n")
                     st.sidebar.warning("No polygon geometries found.")
                     continue
 
-                gdf["geometry"] = gdf.geometry.buffer(0)
+                # SPLIT MULTIPART + CLEAN GEOMETRY
+                gdf = gdf.explode(ignore_index=True)
+                gdf = _clean_geometries(gdf)
+
+                if gdf.empty:
+                    log.write("No valid geometries after cleaning.\n")
+                    st.sidebar.warning("No valid geometries after cleaning.")
+                    continue
 
                 # --- UPDATED: merge ALL features into ONE polygon feature (dissolve internal boundaries) ---
-                dissolved_geom = gdf.unary_union
+                dissolved_geom = _safe_union(gdf.geometry)
                 dissolved_gdf = gpd.GeoDataFrame(geometry=[dissolved_geom], crs=gdf.crs)
 
-                # --- NEW: add required attribute fields to the single output feature ---
+                # ADD AREA_HA TO FINAL DISSOLVED OUTPUT
+                try:
+                    if dissolved_gdf.crs is None:
+                        dissolved_gdf["Area_Ha"] = 0
+                        log.write("CRS missing — Area_Ha and region lookup may be incorrect.\n")
+                        st.sidebar.warning("CRS missing — Area_Ha and region lookup may be incorrect.")
+                    else:
+                        if getattr(dissolved_gdf.crs, "is_geographic", False):
+                            dissolved_area_gdf = dissolved_gdf.to_crs(epsg=3347)
+                        else:
+                            dissolved_area_gdf = dissolved_gdf
+
+                        dissolved_gdf["Area_Ha"] = (dissolved_area_gdf.geometry.area / 10000).round(4)
+                        log.write("Area_Ha field added successfully.\n")
+                except Exception as e:
+                    dissolved_gdf["Area_Ha"] = 0
+                    log.write(f"Error calculating Area_Ha: {str(e)}\n")
+                    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
+
+                # --- NEW: Natural Region/Subregion lookup from Alberta Natural Regions layer ---
+                region_result = get_natural_region_overlap(dissolved_gdf, natural_regions_gdf)
+
+                dissolved_gdf["Region"] = str(region_result["tda_region"])
+                dissolved_gdf["NRNAME"] = str(region_result["region_raw"])
+                dissolved_gdf["NSRNAME"] = str(region_result["subregion_raw"])
+                dissolved_gdf["Reg_Conf"] = str(region_result["confidence"])
+                dissolved_gdf["Reg_Ha"] = round(float(region_result["overlap_ha"]), 4)
+
+                if region_result["tda_region"]:
+                    st.sidebar.info(
+                        f"{zip_path.stem}: Natural Region = {region_result['tda_region']} "
+                        f"({region_result['region_raw']})"
+                    )
+                    log.write(
+                        f"Natural Region detected: {region_result['tda_region']} "
+                        f"({region_result['region_raw']}); Subregion: {region_result['subregion_raw']}; "
+                        f"Overlap ha: {region_result['overlap_ha']}; Confidence: {region_result['confidence']}\n"
+                    )
+
+                    if not region_result["all_overlaps"].empty and len(region_result["all_overlaps"]) > 1:
+                        st.sidebar.caption("Multiple overlaps found. Largest overlap was used for the output attributes.")
+                        st.sidebar.dataframe(region_result["all_overlaps"], use_container_width=True)
+                else:
+                    st.sidebar.warning(f"{zip_path.stem}: Natural Region not detected ({region_result['confidence']}).")
+                    log.write(f"Natural Region not detected: {region_result['confidence']}\n")
+
+                # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
                 dissolved_gdf["Status"] = "1"
                 dissolved_gdf["Project_Co"] = str(project_code).strip()
@@ -1542,4 +1784,3 @@ if uploaded_files:
 # IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
 # if temp_base_dir.exists():
 #     shutil.rmtree(temp_base_dir)
-
