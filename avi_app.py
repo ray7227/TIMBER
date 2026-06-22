@@ -8,7 +8,7 @@ from docx.oxml.ns import qn
 from tempfile import NamedTemporaryFile
 import base64
 import re
-import math
+import mathA
 import geopandas as gpd
 import zipfile
 import shutil
