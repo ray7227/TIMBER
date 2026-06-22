@@ -1,0 +1,31 @@
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version="3.40.5-Bratislava">
+  <identifier>https://geospatial.alberta.ca/titan/rest/services/biota/natural_subregions_alberta_2005/FeatureServer/0</identifier>
+  <parentidentifier></parentidentifier>
+  <language></language>
+  <type>dataset</type>
+  <title>Natural Subregions of Alberta (2005)</title>
+  <abstract></abstract>
+  <links>
+    <link mimeType="" type="WWW:LINK" url="https://geospatial.alberta.ca/titan/rest/services/biota/natural_subregions_alberta_2005/FeatureServer/0" description="" name="Source" format="" size=""/>
+  </links>
+  <dates/>
+  <fees></fees>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys nativeFormat="Wkt">
+      <wkt>PROJCRS["NAD83 / Alberta 10-TM (Forest)",BASEGEOGCRS["NAD83",DATUM["North American Datum 1983",ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]],ID["EPSG",4269]],CONVERSION["Alberta 10-degree TM (Forest)",METHOD["Transverse Mercator",ID["EPSG",9807]],PARAMETER["Latitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8801]],PARAMETER["Longitude of natural origin",-115,ANGLEUNIT["degree",0.0174532925199433],ID["EPSG",8802]],PARAMETER["Scale factor at natural origin",0.9992,SCALEUNIT["unity",1],ID["EPSG",8805]],PARAMETER["False easting",500000,LENGTHUNIT["metre",1],ID["EPSG",8806]],PARAMETER["False northing",0,LENGTHUNIT["metre",1],ID["EPSG",8807]]],CS[Cartesian,2],AXIS["(E)",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["(N)",north,ORDER[2],LENGTHUNIT["metre",1]],USAGE[SCOPE["Province-wide spatial data management."],AREA["Canada - Alberta."],BBOX[48.99,-120,60,-109.98]],ID["EPSG",3400]]</wkt>
+      <proj4>+proj=tmerc +lat_0=0 +lon_0=-115 +k=0.9992 +x_0=500000 +y_0=0 +datum=NAD83 +units=m +no_defs</proj4>
+      <srsid>1358</srsid>
+      <srid>3400</srid>
+      <authid>EPSG:3400</authid>
+      <description>NAD83 / Alberta 10-TM (Forest)</description>
+      <projectionacronym>tmerc</projectionacronym>
+      <ellipsoidacronym>EPSG:7019</ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial maxz="nan" minz="nan" miny="5425575.48670000024139881" dimensions="2" crs="EPSG:3400" maxy="6659344.33999999985098839" maxx="865133.51489999983459711" minx="170844.32969999965280294"/>
+  </extent>
+</qgis>
