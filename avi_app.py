@@ -1622,10 +1622,8 @@ st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve t
 natural_regions_gdf, natural_regions_path, natural_regions_error = load_natural_regions_layer()
 if natural_regions_gdf is None:
     st.sidebar.warning("Natural Regions layer not loaded.")
-    st.sidebar.caption(f"Looking in: {REGION_LAYER_FOLDER}")
-    st.sidebar.caption(natural_regions_error)
 else:
-    st.sidebar.success(f"Natural Regions layer loaded: {Path(natural_regions_path).name}")
+    st.sidebar.success("Natural Regions layer loaded.")
 
 
 # --- NEW: metadata inputs for output attribute table ---
@@ -1719,48 +1717,42 @@ if uploaded_files:
                 # ADD AREA_HA TO FINAL DISSOLVED OUTPUT
                 try:
                     if dissolved_gdf.crs is None:
-                        dissolved_gdf["Area_Ha"] = 0
-                        log.write("CRS missing — Area_Ha and region lookup may be incorrect.\n")
-                        st.sidebar.warning("CRS missing — Area_Ha and region lookup may be incorrect.")
+                        dissolved_gdf["Area_ha"] = 0
+                        log.write("CRS missing — Area_ha and region lookup may be incorrect.\n")
+                        st.sidebar.warning("CRS missing — Area_ha and region lookup may be incorrect.")
                     else:
                         if getattr(dissolved_gdf.crs, "is_geographic", False):
                             dissolved_area_gdf = dissolved_gdf.to_crs(epsg=3347)
                         else:
                             dissolved_area_gdf = dissolved_gdf
 
-                        dissolved_gdf["Area_Ha"] = (dissolved_area_gdf.geometry.area / 10000).round(4)
-                        log.write("Area_Ha field added successfully.\n")
+                        dissolved_gdf["Area_ha"] = (dissolved_area_gdf.geometry.area / 10000).round(4)
+                        log.write("Area_ha field added successfully.\n")
                 except Exception as e:
-                    dissolved_gdf["Area_Ha"] = 0
-                    log.write(f"Error calculating Area_Ha: {str(e)}\n")
-                    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
+                    dissolved_gdf["Area_ha"] = 0
+                    log.write(f"Error calculating Area_ha: {str(e)}\n")
+                    st.sidebar.warning(f"Error calculating Area_ha: {str(e)}")
 
-                # --- NEW: Natural Region/Subregion lookup from Alberta Natural Regions layer ---
+                # --- Natural Region lookup from Alberta Natural Regions layer ---
+                # Keep sidebar display simple and only write the simplified Region field to output.
                 region_result = get_natural_region_overlap(dissolved_gdf, natural_regions_gdf)
+                region_text = str(region_result["tda_region"]).strip()
 
-                dissolved_gdf["Region"] = str(region_result["tda_region"])
-                dissolved_gdf["NRNAME"] = str(region_result["region_raw"])
-                dissolved_gdf["NSRNAME"] = str(region_result["subregion_raw"])
-                dissolved_gdf["Reg_Conf"] = str(region_result["confidence"])
-                dissolved_gdf["Reg_Ha"] = round(float(region_result["overlap_ha"]), 4)
+                if not region_text:
+                    region_text = "Not detected"
 
-                if region_result["tda_region"]:
-                    st.sidebar.info(
-                        f"{zip_path.stem}: Natural Region = {region_result['tda_region']} "
-                        f"({region_result['region_raw']})"
-                    )
-                    log.write(
-                        f"Natural Region detected: {region_result['tda_region']} "
-                        f"({region_result['region_raw']}); Subregion: {region_result['subregion_raw']}; "
-                        f"Overlap ha: {region_result['overlap_ha']}; Confidence: {region_result['confidence']}\n"
-                    )
+                dissolved_gdf["Region"] = region_text
 
-                    if not region_result["all_overlaps"].empty and len(region_result["all_overlaps"]) > 1:
-                        st.sidebar.caption("Multiple overlaps found. Largest overlap was used for the output attributes.")
-                        st.sidebar.dataframe(region_result["all_overlaps"], use_container_width=True)
-                else:
-                    st.sidebar.warning(f"{zip_path.stem}: Natural Region not detected ({region_result['confidence']}).")
-                    log.write(f"Natural Region not detected: {region_result['confidence']}\n")
+                # Simple sidebar display only.
+                st.sidebar.success(f"Region: {region_text}")
+
+                log.write(
+                    f"Region: {region_text}; "
+                    f"Raw NRNAME: {region_result['region_raw']}; "
+                    f"Subregion: {region_result['subregion_raw']}; "
+                    f"Overlap ha: {region_result['overlap_ha']}; "
+                    f"Confidence: {region_result['confidence']}\n"
+                )
 
                 # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
