@@ -49,41 +49,9 @@ deciduous = {"Aw", "Pb", "Bw"}
 
 # --- Natural Region spatial lookup ---
 # Put the Alberta Natural Regions/Subregions shapefile files in your repo here:
-# Regions/
-#   REGIONS.shp
-#   REGIONS.shx
-#   REGIONS.dbf
-#   REGIONS.prj
-#   REGIONS.cpg
-#
-# This loader is case-flexible. It will use REGIONS.shp, regions.shp,
-# or the first .shp it finds inside the Regions folder.
-REGION_LAYER_FOLDER = Path(__file__).resolve().parent / "Regions"
-
-
-def find_region_layer_path():
-    """Find the Natural Regions shapefile in the repo, regardless of filename case."""
-    if not REGION_LAYER_FOLDER.exists():
-        return None
-
-    preferred_names = ["REGIONS.shp", "regions.shp", "Regions.shp"]
-    for name in preferred_names:
-        candidate = REGION_LAYER_FOLDER / name
-        if candidate.exists():
-            return candidate
-
-    shp_files = sorted(REGION_LAYER_FOLDER.glob("*.shp"))
-    if shp_files:
-        return shp_files[0]
-
-    return None
-
-
-def get_region_folder_files():
-    """Small debug helper for Streamlit Cloud path issues."""
-    if not REGION_LAYER_FOLDER.exists():
-        return []
-    return sorted([p.name for p in REGION_LAYER_FOLDER.iterdir()])
+# /Regions/regions.shp
+# The Regions folder must also include regions.shx, regions.dbf, regions.prj, regions.cpg, etc.
+REGION_LAYER_PATH = Path(__file__).parent / "Regions" / "regions.shp"
 
 
 def _safe_union(geo_series):
@@ -137,28 +105,27 @@ def normalize_tda_region_name(nrname):
     return str(nrname or "").strip()
 
 
+@st.cache_data(show_spinner=False)
 def load_natural_regions_layer():
     """
     Loads the Alberta Natural Regions/Subregions layer from the repo.
+    Expected folder setup:
+    Regions/
+      regions.shp
+      regions.shx
+      regions.dbf
+      regions.prj
+      regions.cpg
 
-    Returns:
-        natural_regions_gdf, path_used, error_message
+    Expected fields include NRNAME for Natural Region and usually NSRNAME for Subregion.
     """
-    region_path = find_region_layer_path()
-
-    if region_path is None:
-        files_seen = get_region_folder_files()
-        return (
-            None,
-            "",
-            f"No .shp file found in {REGION_LAYER_FOLDER}. Files seen: {files_seen}"
-        )
+    if not REGION_LAYER_PATH.exists():
+        return None
 
     try:
-        gdf = gpd.read_file(region_path)
-        return gdf, str(region_path), ""
-    except Exception as e:
-        return None, str(region_path), f"{type(e).__name__}: {e}"
+        return gpd.read_file(REGION_LAYER_PATH)
+    except Exception:
+        return None
 
 
 def get_natural_region_overlap(project_gdf, regions_gdf):
@@ -270,205 +237,6 @@ def get_natural_region_overlap(project_gdf, regions_gdf):
         empty_result["confidence"] = f"Error: {e}"
         return empty_result
 
-
-
-
-# --- ATS spatial lookup ---
-# GitHub/Streamlit repo setup expected:
-# ATS/
-#   ATS_QRT.zip
-# The ZIP should contain the ATS shapefile pieces (.shp, .shx, .dbf, .prj, etc.).
-ATS_LAYER_FOLDER = Path(__file__).resolve().parent / "ATS"
-ATS_LAYER_ZIP_PATH = ATS_LAYER_FOLDER / "ATS_QRT.zip"
-
-
-def _value_is_blank(value):
-    """Treat NaN/None/empty strings as blank."""
-    try:
-        if pd.isna(value):
-            return True
-    except Exception:
-        pass
-    return str(value).strip() == ""
-
-
-def _number_text(value, width):
-    """Return the first number in a value, zero-padded to the requested width."""
-    if _value_is_blank(value):
-        return ""
-    match = re.search(r"\d+", str(value))
-    if not match:
-        return str(value).strip()
-    return match.group(0).zfill(width)
-
-
-def _meridian_text(value):
-    """Return meridian as W5, W6, etc."""
-    if _value_is_blank(value):
-        return ""
-    text = str(value).strip().upper().replace(" ", "")
-    if text.startswith("W"):
-        return text
-    match = re.search(r"\d+", text)
-    if match:
-        return f"W{match.group(0)}"
-    return text
-
-
-def _quarter_text(value):
-    """Return quarter section text like NE/SW, or blank if missing."""
-    if _value_is_blank(value):
-        return ""
-    text = str(value).strip().upper().replace(" ", "")
-    if text in {"NAN", "NONE", "NULL", "0", "-"}:
-        return ""
-    return text
-
-
-@st.cache_resource(show_spinner=False)
-def load_ats_layer():
-    """
-    Loads the Alberta ATS layer from ATS/ATS_QRT.zip in the repo.
-
-    Returns:
-        ats_gdf, path_used, error_message
-    """
-    if not ATS_LAYER_ZIP_PATH.exists():
-        return None, str(ATS_LAYER_ZIP_PATH), "ATS_QRT.zip not found."
-
-    try:
-        extract_dir = Path(tempfile.mkdtemp(prefix="ats_layer_"))
-        with zipfile.ZipFile(ATS_LAYER_ZIP_PATH, "r") as z:
-            z.extractall(extract_dir)
-
-        shp_files = sorted(extract_dir.rglob("*.shp"))
-        if not shp_files:
-            return None, str(ATS_LAYER_ZIP_PATH), "No .shp found inside ATS_QRT.zip."
-
-        ats_gdf = gpd.read_file(shp_files[0])
-        return ats_gdf, str(shp_files[0]), ""
-
-    except Exception as e:
-        return None, str(ATS_LAYER_ZIP_PATH), f"{type(e).__name__}: {e}"
-
-
-def format_ats_from_row(row, fields):
-    """Build ATS label like SW-12-076-06-W5 from ATS layer fields."""
-    qs_field = fields.get("qs")
-    sec_field = fields.get("sec")
-    twp_field = fields.get("twp")
-    rge_field = fields.get("rge")
-    m_field = fields.get("m")
-    label_field = fields.get("label")
-
-    sec = _number_text(row.get(sec_field, ""), 2) if sec_field else ""
-    twp = _number_text(row.get(twp_field, ""), 3) if twp_field else ""
-    rge = _number_text(row.get(rge_field, ""), 2) if rge_field else ""
-    mer = _meridian_text(row.get(m_field, "")) if m_field else ""
-    qs = _quarter_text(row.get(qs_field, "")) if qs_field else ""
-
-    if sec and twp and rge and mer:
-        prefix = f"{qs}-" if qs else ""
-        return f"{prefix}{sec}-{twp}-{rge}-{mer}"
-
-    if label_field and not _value_is_blank(row.get(label_field, "")):
-        return str(row.get(label_field)).strip()
-
-    return ""
-
-
-def get_ats_intersections(project_gdf, ats_gdf):
-    """
-    Returns all ATS quarter/section labels intersected by the uploaded project shapefile.
-    """
-    empty_result = {
-        "ats_list": [],
-        "ats_text": "",
-        "count": 0,
-        "confidence": "Not found"
-    }
-
-   if ats_gdf is None:
-    st.sidebar.warning("ATS layer not loaded.")
-    st.sidebar.caption(f"Looking for: {ats_path}")
-    st.sidebar.caption(f"Error: {ats_error}")
-else:
-    st.sidebar.success("ATS layer loaded.")
-        return empty_result
-
-    if project_gdf is None or project_gdf.empty:
-        empty_result["confidence"] = "Uploaded layer empty"
-        return empty_result
-
-    if project_gdf.crs is None:
-        empty_result["confidence"] = "Uploaded layer CRS missing"
-        return empty_result
-
-    if ats_gdf.crs is None:
-        empty_result["confidence"] = "ATS layer CRS missing"
-        return empty_result
-
-    try:
-        project = _clean_geometries(project_gdf)
-        if project.empty:
-            empty_result["confidence"] = "No valid project geometry"
-            return empty_result
-
-        # Reproject the uploaded footprint into the ATS CRS instead of reprojecting all ATS polygons.
-        if project.crs != ats_gdf.crs:
-            project = project.to_crs(ats_gdf.crs)
-
-        project_geom = _safe_union(project.geometry)
-
-        # Spatial index first, fallback to direct intersects if needed.
-        try:
-            idx = ats_gdf.sindex.query(project_geom, predicate="intersects")
-            candidates = ats_gdf.iloc[idx].copy()
-        except Exception:
-            candidates = ats_gdf[ats_gdf.geometry.intersects(project_geom)].copy()
-
-        if candidates.empty:
-            empty_result["confidence"] = "No ATS overlap"
-            return empty_result
-
-        fields = {
-            "qs": _find_field(candidates, ["QS", "QTR", "QUARTER", "QUARTERSEC"]),
-            "sec": _find_field(candidates, ["SEC", "SECTION"]),
-            "twp": _find_field(candidates, ["TWP", "TOWNSHIP"]),
-            "rge": _find_field(candidates, ["RGE", "RANGE"]),
-            "m": _find_field(candidates, ["M", "MER", "MERIDIAN"]),
-            "label": _find_field(candidates, ["Label", "LABEL", "ATS", "ATS_LABEL"]),
-        }
-
-        ats_values = []
-        for _, row in candidates.iterrows():
-            try:
-                # Confirm actual intersection, not just bounding-box candidate.
-                if not row.geometry.intersects(project_geom):
-                    continue
-                ats_label = format_ats_from_row(row, fields)
-                if ats_label:
-                    ats_values.append(ats_label)
-            except Exception:
-                continue
-
-        ats_values = sorted(set(ats_values))
-
-        if not ats_values:
-            empty_result["confidence"] = "ATS fields missing or unreadable"
-            return empty_result
-
-        ats_text = ", ".join(ats_values)
-        return {
-            "ats_list": ats_values,
-            "ats_text": ats_text,
-            "count": len(ats_values),
-            "confidence": "ATS found"
-        }
-
-    except Exception as e:
-        empty_result["confidence"] = f"Error: {e}"
-        return empty_result
 
 
 # --- Default values ---
@@ -1818,13 +1586,13 @@ if p3_sidebar_input:
 st.sidebar.header("Shapefile Dissolver Tool")
 st.sidebar.markdown("Drag and drop ZIP files containing shapefiles to dissolve them into a single unified feature. This tool merges features that are split by attributes into one.")
 
-natural_regions_gdf, natural_regions_path, natural_regions_error = load_natural_regions_layer()
+natural_regions_gdf = load_natural_regions_layer()
 if natural_regions_gdf is None:
-    st.sidebar.warning("Natural Regions layer not loaded.")
-
-ats_gdf, ats_path, ats_error = load_ats_layer()
-if ats_gdf is None:
-    st.sidebar.warning("ATS layer not loaded.")
+    st.sidebar.warning(
+        "Natural Regions layer not found. Add Regions/regions.shp and its related shapefile files to the GitHub repo to enable auto-region lookup."
+    )
+else:
+    st.sidebar.success("Natural Regions layer loaded.")
 
 
 # --- NEW: metadata inputs for output attribute table ---
@@ -1918,59 +1686,48 @@ if uploaded_files:
                 # ADD AREA_HA TO FINAL DISSOLVED OUTPUT
                 try:
                     if dissolved_gdf.crs is None:
-                        dissolved_gdf["Area_ha"] = 0
-                        log.write("CRS missing — Area_ha and region lookup may be incorrect.\n")
-                        st.sidebar.warning("CRS missing — Area_ha and region lookup may be incorrect.")
+                        dissolved_gdf["Area_Ha"] = 0
+                        log.write("CRS missing — Area_Ha and region lookup may be incorrect.\n")
+                        st.sidebar.warning("CRS missing — Area_Ha and region lookup may be incorrect.")
                     else:
                         if getattr(dissolved_gdf.crs, "is_geographic", False):
                             dissolved_area_gdf = dissolved_gdf.to_crs(epsg=3347)
                         else:
                             dissolved_area_gdf = dissolved_gdf
 
-                        dissolved_gdf["Area_ha"] = (dissolved_area_gdf.geometry.area / 10000).round(4)
-                        log.write("Area_ha field added successfully.\n")
+                        dissolved_gdf["Area_Ha"] = (dissolved_area_gdf.geometry.area / 10000).round(4)
+                        log.write("Area_Ha field added successfully.\n")
                 except Exception as e:
-                    dissolved_gdf["Area_ha"] = 0
-                    log.write(f"Error calculating Area_ha: {str(e)}\n")
-                    st.sidebar.warning(f"Error calculating Area_ha: {str(e)}")
+                    dissolved_gdf["Area_Ha"] = 0
+                    log.write(f"Error calculating Area_Ha: {str(e)}\n")
+                    st.sidebar.warning(f"Error calculating Area_Ha: {str(e)}")
 
-                # --- Natural Region lookup from Alberta Natural Regions layer ---
-                # Keep sidebar display simple and only write the simplified Region field to output.
+                # --- NEW: Natural Region/Subregion lookup from Alberta Natural Regions layer ---
                 region_result = get_natural_region_overlap(dissolved_gdf, natural_regions_gdf)
-                region_text = str(region_result["tda_region"]).strip()
 
-                if not region_text:
-                    region_text = "Not detected"
+                dissolved_gdf["Region"] = str(region_result["tda_region"])
+                dissolved_gdf["NRNAME"] = str(region_result["region_raw"])
+                dissolved_gdf["NSRNAME"] = str(region_result["subregion_raw"])
+                dissolved_gdf["Reg_Conf"] = str(region_result["confidence"])
+                dissolved_gdf["Reg_Ha"] = round(float(region_result["overlap_ha"]), 4)
 
-                dissolved_gdf["Region"] = region_text
+                if region_result["tda_region"]:
+                    st.sidebar.info(
+                        f"{zip_path.stem}: Natural Region = {region_result['tda_region']} "
+                        f"({region_result['region_raw']})"
+                    )
+                    log.write(
+                        f"Natural Region detected: {region_result['tda_region']} "
+                        f"({region_result['region_raw']}); Subregion: {region_result['subregion_raw']}; "
+                        f"Overlap ha: {region_result['overlap_ha']}; Confidence: {region_result['confidence']}\n"
+                    )
 
-                # Simple sidebar display only.
-                st.sidebar.success(f"Region: {region_text}")
-
-                log.write(
-                    f"Region: {region_text}; "
-                    f"Raw NRNAME: {region_result['region_raw']}; "
-                    f"Subregion: {region_result['subregion_raw']}; "
-                    f"Overlap ha: {region_result['overlap_ha']}; "
-                    f"Confidence: {region_result['confidence']}\n"
-                )
-
-                # --- ATS lookup from Alberta ATS layer ---
-                ats_result = get_ats_intersections(dissolved_gdf, ats_gdf)
-                ats_text = str(ats_result["ats_text"]).strip()
-
-                if not ats_text:
-                    ats_text = "Not detected"
-
-                # Shapefile text fields can truncate long strings, so the processing log keeps the full list too.
-                dissolved_gdf["ATS"] = ats_text[:254]
-                st.sidebar.success(f"ATS: {ats_text}")
-
-                log.write(
-                    f"ATS: {ats_text}; "
-                    f"ATS count: {ats_result['count']}; "
-                    f"Confidence: {ats_result['confidence']}\n"
-                )
+                    if not region_result["all_overlaps"].empty and len(region_result["all_overlaps"]) > 1:
+                        st.sidebar.caption("Multiple overlaps found. Largest overlap was used for the output attributes.")
+                        st.sidebar.dataframe(region_result["all_overlaps"], use_container_width=True)
+                else:
+                    st.sidebar.warning(f"{zip_path.stem}: Natural Region not detected ({region_result['confidence']}).")
+                    log.write(f"Natural Region not detected: {region_result['confidence']}\n")
 
                 # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
