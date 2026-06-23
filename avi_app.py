@@ -277,7 +277,9 @@ def get_natural_region_overlap(project_gdf, regions_gdf):
 # GitHub/Streamlit repo setup expected:
 # ATS/
 #   ATS_QRT.zip
-# The ZIP should contain the ATS shapefile pieces (.shp, .shx, .dbf, .prj, etc.).
+# The ZIP can contain either:
+#   ATS_QRT.gpkg
+# or shapefile pieces such as .shp, .shx, .dbf, .prj, etc.
 ATS_LAYER_FOLDER = Path(__file__).resolve().parent / "ATS"
 ATS_LAYER_ZIP_NAME = "ATS_QRT.zip"
 
@@ -350,6 +352,7 @@ def _quarter_text(value):
 def load_ats_layer():
     """
     Loads the Alberta ATS layer from ATS/ATS_QRT.zip in the repo.
+    Supports either a GeoPackage (.gpkg) or shapefile (.shp) inside the ZIP.
 
     Returns:
         ats_gdf, path_used, error_message
@@ -390,12 +393,24 @@ def load_ats_layer():
         with zipfile.ZipFile(ats_zip_path, "r") as z:
             z.extractall(extract_dir)
 
+        # Your ATS_QRT.zip currently contains ATS_QRT.gpkg, so read .gpkg first.
+        gpkg_files = sorted(extract_dir.rglob("*.gpkg"))
         shp_files = sorted(extract_dir.rglob("*.shp"))
-        if not shp_files:
-            return None, str(ats_zip_path), f"No .shp found inside {ats_zip_path.name}."
 
-        ats_gdf = gpd.read_file(shp_files[0])
-        return ats_gdf, str(shp_files[0]), ""
+        if gpkg_files:
+            ats_path = gpkg_files[0]
+        elif shp_files:
+            ats_path = shp_files[0]
+        else:
+            found_files = sorted([str(p.relative_to(extract_dir)) for p in extract_dir.rglob("*") if p.is_file()])[:20]
+            return (
+                None,
+                str(ats_zip_path),
+                f"No .gpkg or .shp found inside {ats_zip_path.name}. Files seen: {found_files}"
+            )
+
+        ats_gdf = gpd.read_file(ats_path)
+        return ats_gdf, str(ats_path), ""
 
     except Exception as e:
         return None, str(ats_zip_path), f"{type(e).__name__}: {e}"
