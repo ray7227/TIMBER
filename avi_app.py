@@ -388,8 +388,12 @@ def get_ats_intersections(project_gdf, ats_gdf):
         "confidence": "Not found"
     }
 
-    if ats_gdf is None or ats_gdf.empty:
-        empty_result["confidence"] = "ATS layer missing"
+   if ats_gdf is None:
+    st.sidebar.warning("ATS layer not loaded.")
+    st.sidebar.caption(f"Looking for: {ats_path}")
+    st.sidebar.caption(f"Error: {ats_error}")
+else:
+    st.sidebar.success("ATS layer loaded.")
         return empty_result
 
     if project_gdf is None or project_gdf.empty:
