@@ -641,7 +641,9 @@ if st.session_state.reset_trigger:
 # To safely update widget values, processing stores pending values and reruns once.
 if "pending_auto_area" in st.session_state:
     try:
-        st.session_state.area = float(st.session_state.pending_auto_area)
+        auto_area_value = float(st.session_state.pending_auto_area)
+        st.session_state.area = auto_area_value
+        st.session_state.last_auto_area = auto_area_value
     except Exception:
         pass
     del st.session_state.pending_auto_area
@@ -650,10 +652,13 @@ if "pending_auto_region" in st.session_state:
     pending_region = str(st.session_state.pending_auto_region).strip()
     if pending_region in ["Boreal", "Foothills"]:
         st.session_state.region = pending_region
+        st.session_state.last_auto_region = pending_region
     del st.session_state.pending_auto_region
 
 if "pending_auto_legal_loc" in st.session_state:
-    st.session_state.legal_loc = str(st.session_state.pending_auto_legal_loc).strip()
+    auto_legal_value = str(st.session_state.pending_auto_legal_loc).strip()
+    st.session_state.legal_loc = auto_legal_value
+    st.session_state.last_auto_legal_loc = auto_legal_value
     del st.session_state.pending_auto_legal_loc
 
 
@@ -737,7 +742,9 @@ def calculate_avi_and_volumes(
                 return "C-P"
             if dom_sp == "Sb":
                 return "C-Sb"
-            return "C-Sx"
+            # Fb, Fd, Lt, and other conifers do not have a C-Sx column in the TDA table.
+            # Use the available C-Sw conifer-dominant table instead of returning zero.
+            return "C-Sw"
 
         if t_con > 30 and t_dec < 70:
             if dom_sp == "P":
@@ -752,7 +759,7 @@ def calculate_avi_and_volumes(
         row = df[df["Height_and_Density"].str.strip() == key]
 
         group = get_structure_group(dom_species, dom_cover, sec_species, sec_cover)
-        valid_groups = {"D", "MX-P", "MX-Sx", "C-Sw", "C-P", "C-Sb", "C-Sx"}
+        valid_groups = {"D", "MX-P", "MX-Sx", "C-Sw", "C-P", "C-Sb"}
         total_col = f"Total ({group})" if group in valid_groups else "Total (D)"
         total_val = row[total_col].values[0] if not row.empty and total_col in df.columns else 0
 
@@ -2070,26 +2077,53 @@ if uploaded_files:
                 except Exception:
                     calculated_area_ha = 0.0
 
-                auto_signature = (
-                    f"{uploaded_file.name}|"
-                    f"{getattr(uploaded_file, 'size', 0)}|"
-                    f"{region_text}|"
-                    f"{calculated_area_ha}|"
-                    f"{ats_text}"
-                )
+                # --- Autofill logic ---
+                # These are applied on the next rerun because Streamlit widgets have already been created.
+                # They only update automatically when the field is blank/default or still equals the last auto-filled value.
+                # This means the user can manually change Natural Region, Area, or Legal Land Location and it will not be overwritten.
 
-                if st.session_state.get("last_auto_fill_signature") != auto_signature:
-                    if region_text in ["Boreal", "Foothills"]:
-                        st.session_state.pending_auto_region = region_text
+                if region_text in ["Boreal", "Foothills"]:
+                    current_region = str(st.session_state.get("region", default_values["region"])).strip()
+                    last_auto_region = str(st.session_state.get("last_auto_region", "")).strip()
+                    if current_region == last_auto_region or not last_auto_region:
+                        if current_region != region_text:
+                            st.session_state.pending_auto_region = region_text
+                            auto_fill_needs_rerun = True
+                        else:
+                            st.session_state.last_auto_region = region_text
 
-                    if calculated_area_ha > 0:
-                        st.session_state.pending_auto_area = calculated_area_ha
+                if calculated_area_ha > 0:
+                    try:
+                        current_area = float(st.session_state.get("area", default_values["area"]))
+                    except Exception:
+                        current_area = float(default_values["area"])
 
-                    if ats_text and ats_text != "Not detected":
-                        st.session_state.pending_auto_legal_loc = ats_text
+                    last_auto_area = st.session_state.get("last_auto_area", None)
+                    current_area_is_default = abs(current_area - float(default_values["area"])) < 0.000001
+                    current_area_is_last_auto = (
+                        last_auto_area is not None
+                        and abs(current_area - float(last_auto_area)) < 0.000001
+                    )
 
-                    st.session_state.last_auto_fill_signature = auto_signature
-                    auto_fill_needs_rerun = True
+                    if current_area_is_default or current_area_is_last_auto:
+                        if abs(current_area - calculated_area_ha) >= 0.000001:
+                            st.session_state.pending_auto_area = calculated_area_ha
+                            auto_fill_needs_rerun = True
+                        else:
+                            st.session_state.last_auto_area = calculated_area_ha
+
+                if ats_text and ats_text != "Not detected":
+                    current_legal = str(st.session_state.get("legal_loc", default_values["legal_loc"])).strip()
+                    last_auto_legal = str(st.session_state.get("last_auto_legal_loc", "")).strip()
+
+                    # Fill Legal Land Location if blank, or update it when it still contains the prior auto-filled ATS.
+                    # If the user manually edits the box, this will leave their manual text alone.
+                    if current_legal == "" or current_legal == last_auto_legal:
+                        if current_legal != ats_text:
+                            st.session_state.pending_auto_legal_loc = ats_text
+                            auto_fill_needs_rerun = True
+                        else:
+                            st.session_state.last_auto_legal_loc = ats_text
 
                 # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
