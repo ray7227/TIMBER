@@ -603,6 +603,9 @@ if "area" not in st.session_state:
 if "region" not in st.session_state:
     st.session_state.region = default_values["region"]
 
+if "legal_loc" not in st.session_state:
+    st.session_state.legal_loc = default_values["legal_loc"]
+
 if "ctlr_list" not in st.session_state:
     st.session_state.ctlr_list = [{"type": "", "number_holder": ""}]
 
@@ -627,9 +630,31 @@ if st.session_state.reset_trigger:
     st.session_state.sec_sel = default_values["sec_sel"]
     st.session_state.area = default_values["area"]
     st.session_state.region = default_values["region"]
+    st.session_state.legal_loc = default_values["legal_loc"]
     st.session_state.ctlr_list = [{"type": "", "number_holder": ""}]
     st.session_state.reset_trigger = False
     st.rerun()
+
+
+# --- Apply pending autofill from uploaded shapefile before widgets are created ---
+# Processing happens later in the script, after the widgets have already been drawn.
+# To safely update widget values, processing stores pending values and reruns once.
+if "pending_auto_area" in st.session_state:
+    try:
+        st.session_state.area = float(st.session_state.pending_auto_area)
+    except Exception:
+        pass
+    del st.session_state.pending_auto_area
+
+if "pending_auto_region" in st.session_state:
+    pending_region = str(st.session_state.pending_auto_region).strip()
+    if pending_region in ["Boreal", "Foothills"]:
+        st.session_state.region = pending_region
+    del st.session_state.pending_auto_region
+
+if "pending_auto_legal_loc" in st.session_state:
+    st.session_state.legal_loc = str(st.session_state.pending_auto_legal_loc).strip()
+    del st.session_state.pending_auto_legal_loc
 
 
 # --- Page config ---
@@ -1921,6 +1946,8 @@ log_file = output_dir / "processing_log.txt"
 with open(log_file, "w") as log:
     log.write("Processing started\n")
 
+auto_fill_needs_rerun = False
+
 if uploaded_files:
     for uploaded_file in uploaded_files:
         zip_path = temp_base_dir / uploaded_file.name
@@ -2036,6 +2063,34 @@ if uploaded_files:
                     f"Confidence: {ats_result['confidence']}\n"
                 )
 
+                # --- Autofill main form fields from processed footprint ---
+                # These are applied on the next rerun so the widgets remain editable by the user.
+                try:
+                    calculated_area_ha = float(dissolved_gdf["Area_ha"].iloc[0])
+                except Exception:
+                    calculated_area_ha = 0.0
+
+                auto_signature = (
+                    f"{uploaded_file.name}|"
+                    f"{getattr(uploaded_file, 'size', 0)}|"
+                    f"{region_text}|"
+                    f"{calculated_area_ha}|"
+                    f"{ats_text}"
+                )
+
+                if st.session_state.get("last_auto_fill_signature") != auto_signature:
+                    if region_text in ["Boreal", "Foothills"]:
+                        st.session_state.pending_auto_region = region_text
+
+                    if calculated_area_ha > 0:
+                        st.session_state.pending_auto_area = calculated_area_ha
+
+                    if ats_text and ats_text != "Not detected":
+                        st.session_state.pending_auto_legal_loc = ats_text
+
+                    st.session_state.last_auto_fill_signature = auto_signature
+                    auto_fill_needs_rerun = True
+
                 # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
                 dissolved_gdf["Status"] = "1"
@@ -2082,6 +2137,9 @@ if uploaded_files:
         )
 
     st.sidebar.success("🎉 All zip files processed.")
+
+    if auto_fill_needs_rerun:
+        st.rerun()
 
 
 # IMPORTANT: REMOVE THIS IF YOU WANT DOWNLOADS TO WORK RELIABLY
