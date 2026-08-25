@@ -112,6 +112,44 @@ def _clean_geometries(gdf):
     return gdf
 
 
+def _dissolve_single_polygon(gdf, snap_distance_m=0.1):
+    """
+    Merge all features into ONE polygon and remove internal boundary lines.
+
+    A plain union keeps hairline internal lines when adjacent polygons don't
+    share perfectly matching edges (tiny gaps or overlaps). Buffering out by a
+    small distance and back in snaps those edges together so the internal
+    boundaries dissolve. This is done in a projected (metre) CRS so the snap
+    distance is meaningful, then converted back to the original CRS.
+    """
+    if gdf is None or gdf.empty:
+        return gdf
+
+    original_crs = gdf.crs
+    working = gdf
+
+    # Work in metres so snap_distance_m behaves consistently.
+    reprojected = False
+    if working.crs is not None and getattr(working.crs, "is_geographic", False):
+        working = working.to_crs(epsg=3347)
+        reprojected = True
+
+    geom = _safe_union(working.geometry)
+
+    # Snap hairline gaps/overlaps closed so shared edges truly merge.
+    try:
+        geom = geom.buffer(snap_distance_m).buffer(-snap_distance_m)
+    except Exception:
+        pass
+
+    out = gpd.GeoDataFrame(geometry=[geom], crs=working.crs)
+
+    if reprojected:
+        out = out.to_crs(original_crs)
+
+    return out
+
+
 def _find_field(gdf, possible_names):
     """Find a field ignoring case."""
     lower_lookup = {c.lower(): c for c in gdf.columns}
@@ -1896,10 +1934,6 @@ if p3_sidebar_input:
             use_container_width=True
         )
 
-        st.sidebar.markdown(
-            f"[Open P3 Maps folder]({SHAREPOINT_P3_FOLDER_URL})"
-        )
-
         st.sidebar.caption(
             "The SharePoint search uses the generated P3 code above, not the original ATS/LSD input."
         )
@@ -2009,9 +2043,8 @@ if uploaded_files:
                     st.sidebar.warning("No valid geometries after cleaning.")
                     continue
 
-                # --- UPDATED: merge ALL features into ONE polygon feature (dissolve internal boundaries) ---
-                dissolved_geom = _safe_union(gdf.geometry)
-                dissolved_gdf = gpd.GeoDataFrame(geometry=[dissolved_geom], crs=gdf.crs)
+                # --- UPDATED: merge ALL features into ONE polygon feature and dissolve internal lines ---
+                dissolved_gdf = _dissolve_single_polygon(gdf)
 
                 # ADD AREA_HA TO FINAL DISSOLVED OUTPUT
                 try:
