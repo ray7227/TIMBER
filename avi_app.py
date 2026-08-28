@@ -1513,8 +1513,8 @@ if st.session_state.show_salvage_form:
                     run = p.add_run(str(other_specify_details).strip())
                     run.font.name = "Times New Roman"
                     run.font.size = Pt(10)
-                    run.font.bold = False
-                    run.font.underline = True
+                    run.font.bold = True
+                    run.font.underline = False
                 else:
                     run = p.add_run(right)
                     run.font.name = "Times New Roman"
