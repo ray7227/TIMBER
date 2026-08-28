@@ -1500,22 +1500,26 @@ if st.session_state.show_salvage_form:
                 run.font.bold = True
 
             elif right == "Other (specify)":
-                run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} {right}")
+                other_selected = "Other (specify)" in vegetation and bool(str(other_specify_details).strip())
+
+                # Checkbox + left column, then the checkbox for the Other row.
+                run = p.add_run(f"{left_indent}{box(left)} {left}{right_indent}\t{box(right)} ")
                 run.font.name = "Times New Roman"
                 run.font.size = Pt(10)
                 run.font.bold = True
 
-                if "Other (specify)" in vegetation and other_specify_details:
-                    run = p.add_run(": ")
-                    run.font.name = "Times New Roman"
-                    run.font.size = Pt(10)
-                    run.font.bold = True
-
-                    run = p.add_run(other_specify_details)
+                if other_selected:
+                    # Replace the "Other (specify)" label with the user's typed text.
+                    run = p.add_run(str(other_specify_details).strip())
                     run.font.name = "Times New Roman"
                     run.font.size = Pt(10)
                     run.font.bold = False
                     run.font.underline = True
+                else:
+                    run = p.add_run(right)
+                    run.font.name = "Times New Roman"
+                    run.font.size = Pt(10)
+                    run.font.bold = True
 
                 run = p.add_run("\t\t")
                 run.font.name = "Times New Roman"
