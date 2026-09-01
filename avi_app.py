@@ -569,6 +569,182 @@ def get_ats_intersections(project_gdf, ats_gdf):
         return empty_result
 
 
+# --- FMA (Forest Management Agreement) spatial lookup ---
+# Export the Alberta FMA public layer to a shapefile and place it in the repo here:
+# FMA/
+#   FMA_Areas.shp (.shx, .dbf, .prj, .cpg)
+#
+# Source (public web feature service):
+#   https://geospatial.alberta.ca/titan/rest/services/boundaries/forest_management_agreement_public/FeatureServer/0
+#
+# This loader is case-flexible. It will use FMA_Areas.shp, fma_areas.shp,
+# or the first .shp it finds inside the FMA folder.
+FMA_LAYER_FOLDER = Path(__file__).resolve().parent / "FMA"
+
+
+def find_fma_layer_path():
+    """Find the FMA shapefile in the repo, regardless of filename case."""
+    if not FMA_LAYER_FOLDER.exists():
+        return None
+
+    preferred_names = ["FMA_Areas.shp", "FMA_AREAS.shp", "fma_areas.shp", "FMA.shp"]
+    for name in preferred_names:
+        candidate = FMA_LAYER_FOLDER / name
+        if candidate.exists():
+            return candidate
+
+    shp_files = sorted(FMA_LAYER_FOLDER.glob("*.shp"))
+    if shp_files:
+        return shp_files[0]
+
+    return None
+
+
+def get_fma_folder_files():
+    """Small debug helper for Streamlit Cloud path issues."""
+    if not FMA_LAYER_FOLDER.exists():
+        return []
+    return sorted([p.name for p in FMA_LAYER_FOLDER.iterdir()])
+
+
+def load_fma_layer():
+    """
+    Loads the Alberta Forest Management Agreement layer from the repo.
+
+    Returns:
+        fma_gdf, path_used, error_message
+    """
+    fma_path = find_fma_layer_path()
+
+    if fma_path is None:
+        files_seen = get_fma_folder_files()
+        return (
+            None,
+            "",
+            f"No .shp file found in {FMA_LAYER_FOLDER}. Files seen: {files_seen}"
+        )
+
+    try:
+        gdf = gpd.read_file(fma_path)
+        return gdf, str(fma_path), ""
+    except Exception as e:
+        return None, str(fma_path), f"{type(e).__name__}: {e}"
+
+
+def format_fma_label(name, num):
+    """Combine FMA holder name and number into one label like 'Holder Name (FMA_NUM)'."""
+    name = str(name or "").strip()
+    num = str(num or "").strip()
+    if name.lower() in {"nan", "none", "null"}:
+        name = ""
+    if num.lower() in {"nan", "none", "null"}:
+        num = ""
+    if name and num:
+        return f"{name} ({num})"
+    if name:
+        return name
+    if num:
+        return num
+    return ""
+
+
+def get_fma_intersections(project_gdf, fma_gdf):
+    """
+    Returns all Forest Management Agreements intersected by the uploaded footprint,
+    ordered by overlap area (largest first).
+    """
+    empty_result = {
+        "fma_list": [],
+        "fma_text": "",
+        "primary": "",
+        "count": 0,
+        "confidence": "Not found"
+    }
+
+    if fma_gdf is None or fma_gdf.empty:
+        empty_result["confidence"] = "FMA layer missing"
+        return empty_result
+
+    if project_gdf is None or project_gdf.empty:
+        empty_result["confidence"] = "Uploaded layer empty"
+        return empty_result
+
+    if project_gdf.crs is None:
+        empty_result["confidence"] = "Uploaded layer CRS missing"
+        return empty_result
+
+    if fma_gdf.crs is None:
+        empty_result["confidence"] = "FMA layer CRS missing"
+        return empty_result
+
+    try:
+        project = _clean_geometries(project_gdf)
+        fma = _clean_geometries(fma_gdf)
+
+        if project.empty or fma.empty:
+            empty_result["confidence"] = "No valid geometry"
+            return empty_result
+
+        name_field = _find_field(fma, ["FMA_NAME", "NAME", "HOLDER", "COMPANY"])
+        num_field = _find_field(fma, ["FMA_NUM", "FMA_NUMBER", "FMA_CODE", "DISPOSITION", "NUMBER"])
+
+        if fma.crs != project.crs:
+            fma = fma.to_crs(project.crs)
+
+        project_geom = _safe_union(project.geometry)
+
+        candidates = fma[fma.geometry.intersects(project_geom)].copy()
+        if candidates.empty:
+            empty_result["confidence"] = "No FMA overlap"
+            return empty_result
+
+        # Measure overlap in an equal-area CRS so the largest FMA is ranked first.
+        project_eq = project.to_crs(epsg=3347)
+        candidates_eq = candidates.to_crs(epsg=3347)
+        project_geom_eq = _safe_union(project_eq.geometry)
+
+        rows = []
+        for idx, row in candidates_eq.iterrows():
+            try:
+                overlap_ha = row.geometry.intersection(project_geom_eq).area / 10000
+            except Exception:
+                overlap_ha = 0
+
+            if overlap_ha > 0:
+                source_row = candidates.loc[idx]
+                name_val = source_row.get(name_field, "") if name_field else ""
+                num_val = source_row.get(num_field, "") if num_field else ""
+                label = format_fma_label(name_val, num_val)
+                if label:
+                    rows.append({"Label": label, "Overlap_Ha": round(overlap_ha, 4)})
+
+        if not rows:
+            empty_result["confidence"] = "No measurable FMA overlap"
+            return empty_result
+
+        overlaps = pd.DataFrame(rows)
+        overlaps = (
+            overlaps.groupby("Label", as_index=False)["Overlap_Ha"]
+            .sum()
+            .sort_values("Overlap_Ha", ascending=False)
+        )
+
+        fma_values = overlaps["Label"].tolist()
+        fma_text = ", ".join(fma_values)
+
+        return {
+            "fma_list": fma_values,
+            "fma_text": fma_text,
+            "primary": fma_values[0] if fma_values else "",
+            "count": len(fma_values),
+            "confidence": "FMA found"
+        }
+
+    except Exception as e:
+        empty_result["confidence"] = f"Error: {e}"
+        return empty_result
+
+
 # --- Default values ---
 default_values = {
     "is_merch": "Yes",
@@ -698,6 +874,12 @@ if "pending_auto_legal_loc" in st.session_state:
     st.session_state.legal_loc = auto_legal_value
     st.session_state.last_auto_legal_loc = auto_legal_value
     del st.session_state.pending_auto_legal_loc
+
+if "pending_auto_disposition_fma" in st.session_state:
+    auto_fma_value = str(st.session_state.pending_auto_disposition_fma).strip()
+    st.session_state.disposition_fma = auto_fma_value
+    st.session_state.last_auto_disposition_fma = auto_fma_value
+    del st.session_state.pending_auto_disposition_fma
 
 
 # --- Page config ---
@@ -1960,6 +2142,12 @@ if ats_gdf is None:
     st.sidebar.caption(f"Looking for: {ats_path}")
     st.sidebar.caption(f"Error: {ats_error}")
 
+fma_gdf, fma_path, fma_error = load_fma_layer()
+if fma_gdf is None:
+    st.sidebar.warning("FMA layer not loaded.")
+    st.sidebar.caption(f"Looking for: {fma_path}")
+    st.sidebar.caption(f"Error: {fma_error}")
+
 
 # --- NEW: metadata inputs for output attribute table ---
 st.sidebar.subheader("Output Attributes")
@@ -2107,6 +2295,23 @@ if uploaded_files:
                     f"Confidence: {ats_result['confidence']}\n"
                 )
 
+                # --- FMA lookup from Alberta Forest Management Agreement layer ---
+                fma_result = get_fma_intersections(dissolved_gdf, fma_gdf)
+                fma_text = str(fma_result["fma_text"]).strip()
+
+                if not fma_text:
+                    fma_text = "Not detected"
+
+                # Shapefile text fields can truncate long strings, so the processing log keeps the full list too.
+                dissolved_gdf["FMA"] = fma_text[:254]
+                st.sidebar.success(f"FMA: {fma_text}")
+
+                log.write(
+                    f"FMA: {fma_text}; "
+                    f"FMA count: {fma_result['count']}; "
+                    f"Confidence: {fma_result['confidence']}\n"
+                )
+
                 # --- Autofill main form fields from processed footprint ---
                 # These are applied on the next rerun so the widgets remain editable by the user.
                 try:
@@ -2161,6 +2366,19 @@ if uploaded_files:
                             auto_fill_needs_rerun = True
                         else:
                             st.session_state.last_auto_legal_loc = ats_text
+
+                if fma_text and fma_text != "Not detected":
+                    current_fma = str(st.session_state.get("disposition_fma", default_values["disposition_fma"])).strip()
+                    last_auto_fma = str(st.session_state.get("last_auto_disposition_fma", "")).strip()
+
+                    # Fill the FMA & Holder field if blank, or update it when it still contains the prior auto-filled value.
+                    # If the user manually edits the box, this will leave their manual text alone.
+                    if current_fma == "" or current_fma == last_auto_fma:
+                        if current_fma != fma_text:
+                            st.session_state.pending_auto_disposition_fma = fma_text
+                            auto_fill_needs_rerun = True
+                        else:
+                            st.session_state.last_auto_disposition_fma = fma_text
 
                 # --- add required attribute fields to the single output feature ---
                 dissolved_gdf["Add_Date"] = add_date.strftime("%Y-%m-%d")
