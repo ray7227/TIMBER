@@ -16,6 +16,9 @@ from tempfile import mkdtemp
 import tempfile
 from pathlib import Path
 import datetime
+import json
+import urllib.parse
+import urllib.request
 from urllib.parse import quote
 
 
@@ -607,28 +610,72 @@ def get_fma_folder_files():
     return sorted([p.name for p in FMA_LAYER_FOLDER.iterdir()])
 
 
+# Public web feature service query endpoint (used when no local shapefile is present).
+FMA_SERVICE_QUERY_URL = (
+    "https://geospatial.alberta.ca/titan/rest/services/boundaries/"
+    "forest_management_agreement_public/FeatureServer/0/query"
+)
+
+
+def _load_fma_from_service():
+    """Fetch the FMA layer live from Alberta's public FeatureServer as GeoJSON."""
+    params = {
+        "where": "1=1",
+        "outFields": "FMA_NAME,FMA_NUM,FMA_CODE",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    url = FMA_SERVICE_QUERY_URL + "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+
+    features = data.get("features", [])
+    if not features:
+        raise ValueError("FMA service returned no features")
+
+    # ArcGIS f=geojson returns WGS84 (EPSG:4326).
+    gdf = gpd.GeoDataFrame.from_features(features, crs="EPSG:4326")
+    if gdf.empty:
+        raise ValueError("FMA service returned an empty layer")
+    return gdf
+
+
+@st.cache_resource(show_spinner=False)
 def load_fma_layer():
     """
-    Loads the Alberta Forest Management Agreement layer from the repo.
+    Loads the Alberta Forest Management Agreement layer.
+
+    Order of preference:
+      1. A local shapefile in the repo FMA/ folder (offline, deliberate).
+      2. The public web feature service, fetched live (no file needed).
 
     Returns:
-        fma_gdf, path_used, error_message
+        fma_gdf, source_used, error_message
     """
+    # 1. Local shapefile if present.
     fma_path = find_fma_layer_path()
+    local_err = "no local shapefile"
+    if fma_path is not None:
+        try:
+            gdf = gpd.read_file(fma_path)
+            if not gdf.empty:
+                return gdf, str(fma_path), ""
+            local_err = "local shapefile is empty"
+        except Exception as e:
+            local_err = f"{type(e).__name__}: {e}"
 
-    if fma_path is None:
-        files_seen = get_fma_folder_files()
+    # 2. Live public web feature service.
+    try:
+        gdf = _load_fma_from_service()
+        return gdf, "Alberta FMA web feature service (live)", ""
+    except Exception as e:
         return (
             None,
-            "",
-            f"No .shp file found in {FMA_LAYER_FOLDER}. Files seen: {files_seen}"
+            FMA_SERVICE_QUERY_URL,
+            f"Local: {local_err}; Service: {type(e).__name__}: {e}"
         )
-
-    try:
-        gdf = gpd.read_file(fma_path)
-        return gdf, str(fma_path), ""
-    except Exception as e:
-        return None, str(fma_path), f"{type(e).__name__}: {e}"
 
 
 def format_fma_label(name, num):
@@ -2145,8 +2192,11 @@ if ats_gdf is None:
 fma_gdf, fma_path, fma_error = load_fma_layer()
 if fma_gdf is None:
     st.sidebar.warning("FMA layer not loaded.")
-    st.sidebar.caption(f"Looking for: {fma_path}")
+    st.sidebar.caption(f"Source tried: {fma_path}")
     st.sidebar.caption(f"Error: {fma_error}")
+else:
+    st.sidebar.success("FMA layer loaded.")
+    st.sidebar.caption(f"Source: {fma_path}")
 
 
 # --- NEW: metadata inputs for output attribute table ---
