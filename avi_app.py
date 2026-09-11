@@ -1,4 +1,5 @@
 import os
+import io
 import streamlit as st
 import pandas as pd
 from docx import Document
@@ -1022,6 +1023,108 @@ def find_solar_match_for_shadow(image_date, latitude, longitude, shadow_heading,
     return best
 
 
+
+def _haversine_distance_m(lat1, lon1, lat2, lon2):
+    """Great-circle distance in metres between two WGS84 lon/lat points."""
+    earth_radius_m = 6371008.8
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2.0) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2.0) ** 2
+    )
+    return earth_radius_m * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+
+def _bearing_deg(lat1, lon1, lat2, lon2):
+    """Initial bearing (0-360° clockwise from north) from point 1 to point 2."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_lambda = math.radians(lon2 - lon1)
+    y = math.sin(d_lambda) * math.cos(phi2)
+    x = (
+        math.cos(phi1) * math.sin(phi2)
+        - math.sin(phi1) * math.cos(phi2) * math.cos(d_lambda)
+    )
+    return (math.degrees(math.atan2(y, x)) + 360.0) % 360.0
+
+
+def _analyze_shadow_line(drawing):
+    """
+    Read a Leaflet/GeoJSON polyline drawn from shadow tip -> tree base.
+    Returns length, heading and the tree-base coordinate (the final vertex).
+    """
+    if not drawing:
+        return None
+
+    geometry = drawing.get("geometry", drawing)
+    if geometry.get("type") != "LineString":
+        return None
+
+    coords = geometry.get("coordinates") or []
+    if len(coords) < 2:
+        return None
+
+    total_length_m = 0.0
+    for first, second in zip(coords[:-1], coords[1:]):
+        lon1, lat1 = float(first[0]), float(first[1])
+        lon2, lat2 = float(second[0]), float(second[1])
+        total_length_m += _haversine_distance_m(lat1, lon1, lat2, lon2)
+
+    start_lon, start_lat = map(float, coords[0][:2])
+    end_lon, end_lat = map(float, coords[-1][:2])
+    heading_deg = _bearing_deg(start_lat, start_lon, end_lat, end_lon)
+
+    return {
+        "length_m": total_length_m,
+        "heading_deg": heading_deg,
+        "tree_latitude": end_lat,
+        "tree_longitude": end_lon,
+        "vertex_count": len(coords),
+    }
+
+
+@st.cache_data(show_spinner=False)
+def _load_tree_height_project_zip(zip_bytes):
+    """Load the first shapefile from an uploaded ZIP and return it in WGS84 for the map."""
+    temp_dir = Path(tempfile.mkdtemp(prefix="tree_height_map_"))
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+            # Extract safely inside the temporary directory.
+            for member in zf.infolist():
+                if member.is_dir():
+                    continue
+                target = (temp_dir / member.filename).resolve()
+                if temp_dir.resolve() not in target.parents:
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(member) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+
+        shapefiles = sorted(temp_dir.rglob("*.shp"))
+        if not shapefiles:
+            return None, "", "No .shp file was found inside the ZIP. Include the .shp, .shx, .dbf and .prj files together."
+
+        shp_path = shapefiles[0]
+        gdf = gpd.read_file(shp_path)
+        if gdf.empty:
+            return None, shp_path.name, "The uploaded shapefile is empty."
+        if gdf.crs is None:
+            return None, shp_path.name, "The shapefile has no CRS. Include its .prj file so the app can place it correctly."
+
+        gdf = _clean_geometries(gdf)
+        if gdf.empty:
+            return None, shp_path.name, "No valid geometries were found in the shapefile."
+
+        return gdf.to_crs(epsg=4326), shp_path.name, ""
+    except Exception as exc:
+        return None, "", f"Could not read the shapefile ZIP: {type(exc).__name__}: {exc}"
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 # Midpoints of the growth-rate ranges already described in the existing tree-height help text.
 TREE_GROWTH_DEFAULTS = {
     "Sw": 0.45,
@@ -1327,89 +1430,213 @@ with col1:
         )
 
         if tree_height_method == "Shadow / imagery":
-            shadow_col1, shadow_col2 = st.columns(2)
+            st.caption(
+                "Upload the project shapefile, then draw one straight line from the shadow tip to the tree base. "
+                "The app will automatically use that line's length, heading and tree-base coordinates."
+            )
 
-            with shadow_col1:
-                shadow_length_m = st.number_input(
-                    "Shadow length (m)",
-                    min_value=0.0,
-                    value=0.0,
-                    step=0.1,
-                    format="%.2f",
-                    key="tree_shadow_length",
-                    help="Measure from the shadow tip to the base of the tree, down the centre of the shadow."
-                )
-                shadow_heading_deg = st.number_input(
-                    "Shadow heading: tip → tree base (°)",
-                    min_value=0.0,
-                    max_value=360.0,
-                    value=0.0,
-                    step=0.1,
-                    format="%.2f",
-                    key="tree_shadow_heading",
-                    help="Use the heading measured from the shadow tip toward the tree base. Measuring the opposite direction reverses the heading."
-                )
-                image_date = st.date_input(
-                    "Imagery date",
-                    value=datetime.date.today(),
-                    key="tree_image_date"
+            tree_map_upload = st.file_uploader(
+                "Project shapefile (.zip)",
+                type=["zip"],
+                key="tree_height_map_shapefile",
+                help="ZIP the shapefile components together (.shp, .shx, .dbf and .prj)."
+            )
+
+            # Keep the imagery date visible because the sun angle depends on the image acquisition date.
+            image_date = st.date_input(
+                "Imagery date",
+                value=datetime.date.today(),
+                key="tree_image_date",
+                help="Use the acquisition date of the imagery on which the shadow is being measured."
+            )
+
+            map_measurement = None
+            map_gdf = None
+
+            if tree_map_upload is not None:
+                map_gdf, tree_map_layer_name, tree_map_error = _load_tree_height_project_zip(
+                    tree_map_upload.getvalue()
                 )
 
-            with shadow_col2:
-                tree_latitude = st.number_input(
-                    "Latitude",
-                    min_value=-90.0,
-                    max_value=90.0,
-                    value=54.000000,
-                    step=0.000001,
-                    format="%.6f",
-                    key="tree_latitude"
-                )
-                tree_longitude = st.number_input(
-                    "Longitude",
-                    min_value=-180.0,
-                    max_value=180.0,
-                    value=-115.000000,
-                    step=0.000001,
-                    format="%.6f",
-                    key="tree_longitude"
-                )
+                if tree_map_error:
+                    st.error(tree_map_error)
+                elif map_gdf is not None:
+                    try:
+                        import folium
+                        from folium.plugins import Draw, MeasureControl
+                        from streamlit_folium import st_folium
+
+                        minx, miny, maxx, maxy = map_gdf.total_bounds
+                        center_lat = float((miny + maxy) / 2.0)
+                        center_lon = float((minx + maxx) / 2.0)
+
+                        tree_map = folium.Map(
+                            location=[center_lat, center_lon],
+                            zoom_start=16,
+                            tiles=None,
+                            control_scale=True,
+                            prefer_canvas=True,
+                        )
+
+                        # Satellite imagery is the default view for identifying individual tree shadows.
+                        folium.TileLayer(
+                            tiles=(
+                                "https://server.arcgisonline.com/ArcGIS/rest/services/"
+                                "World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                            ),
+                            attr="Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+                            name="Satellite imagery",
+                            overlay=False,
+                            control=True,
+                        ).add_to(tree_map)
+                        folium.TileLayer(
+                            tiles="OpenStreetMap",
+                            name="OpenStreetMap",
+                            overlay=False,
+                            control=True,
+                        ).add_to(tree_map)
+
+                        folium.GeoJson(
+                            map_gdf.__geo_interface__,
+                            name=tree_map_layer_name or "Project shapefile",
+                            style_function=lambda _feature: {
+                                "color": "#00E5FF",
+                                "weight": 3,
+                                "fillColor": "#00E5FF",
+                                "fillOpacity": 0.08,
+                            },
+                        ).add_to(tree_map)
+
+                        # Re-add the last captured line so it remains visible after Streamlit reruns.
+                        saved_shadow_line = st.session_state.get("tree_shadow_line_geojson")
+                        if saved_shadow_line:
+                            folium.GeoJson(
+                                saved_shadow_line,
+                                name="Measured shadow",
+                                style_function=lambda _feature: {
+                                    "color": "#FF3B30",
+                                    "weight": 5,
+                                },
+                            ).add_to(tree_map)
+
+                        # The draw control is what feeds the line back into Python. Only a polyline is enabled.
+                        Draw(
+                            export=False,
+                            position="topleft",
+                            draw_options={
+                                "polyline": {
+                                    "allowIntersection": False,
+                                    "shapeOptions": {"color": "#FF3B30", "weight": 5},
+                                },
+                                "polygon": False,
+                                "rectangle": False,
+                                "circle": False,
+                                "marker": False,
+                                "circlemarker": False,
+                            },
+                            edit_options={"edit": False, "remove": True},
+                        ).add_to(tree_map)
+
+                        # Also provide Leaflet's metre ruler for quick visual checking.
+                        MeasureControl(
+                            position="topleft",
+                            primary_length_unit="meters",
+                            secondary_length_unit="kilometers",
+                        ).add_to(tree_map)
+
+                        folium.LayerControl(collapsed=True).add_to(tree_map)
+
+                        if all(math.isfinite(v) for v in [minx, miny, maxx, maxy]):
+                            if abs(maxx - minx) > 1e-9 or abs(maxy - miny) > 1e-9:
+                                tree_map.fit_bounds([[float(miny), float(minx)], [float(maxy), float(maxx)]])
+
+                        st.markdown(
+                            "**Measure the shadow:** choose the line tool on the map and click **shadow tip first**, "
+                            "then **tree base second**. Double-click the base to finish the line."
+                        )
+
+                        tree_map_data = st_folium(
+                            tree_map,
+                            height=520,
+                            use_container_width=True,
+                            key="tree_shadow_gis_map",
+                        )
+
+                        newest_drawing = None
+                        if isinstance(tree_map_data, dict):
+                            newest_drawing = tree_map_data.get("last_active_drawing")
+                            if not newest_drawing:
+                                all_drawings = tree_map_data.get("all_drawings") or []
+                                if all_drawings:
+                                    newest_drawing = all_drawings[-1]
+
+                        if newest_drawing and _analyze_shadow_line(newest_drawing):
+                            st.session_state.tree_shadow_line_geojson = newest_drawing
+
+                        active_shadow_line = st.session_state.get("tree_shadow_line_geojson")
+                        map_measurement = _analyze_shadow_line(active_shadow_line)
+
+                        if st.button("Clear measured shadow", key="clear_tree_shadow_line"):
+                            st.session_state.pop("tree_shadow_line_geojson", None)
+                            st.rerun()
+
+                    except ImportError:
+                        st.error(
+                            "The GIS measurement map needs the `folium` and `streamlit-folium` packages. "
+                            "Add them to requirements.txt and redeploy the app."
+                        )
+                    except Exception as exc:
+                        st.error(f"Could not display the GIS measurement map: {type(exc).__name__}: {exc}")
+
+            if map_measurement is not None:
+                shadow_length_m = map_measurement["length_m"]
+                shadow_heading_deg = map_measurement["heading_deg"]
+                tree_latitude = map_measurement["tree_latitude"]
+                tree_longitude = map_measurement["tree_longitude"]
+
+                measure_col1, measure_col2, measure_col3 = st.columns(3)
+                measure_col1.metric("Shadow length", f"{shadow_length_m:.2f} m")
+                measure_col2.metric("Heading tip → base", f"{shadow_heading_deg:.2f}°")
+                measure_col3.metric("Tree location", f"{tree_latitude:.5f}, {tree_longitude:.5f}")
+
+                if map_measurement["vertex_count"] > 2:
+                    st.warning("For the most reliable heading, draw a straight two-point line from the shadow tip directly to the tree base.")
+
                 apply_growth = st.checkbox(
                     "Adjust older imagery for growth",
                     value=False,
                     key="tree_apply_growth"
                 )
 
-            growth_rate = 0.0
-            assessment_date = datetime.date.today()
-            growth_species_code = ""
-            if apply_growth:
-                growth_col1, growth_col2, growth_col3 = st.columns(3)
-                with growth_col1:
-                    growth_species_sel = st.selectbox(
-                        "Species for growth adjustment",
-                        species_choices,
-                        key="tree_growth_species"
-                    )
-                    growth_species_code = growth_species_sel.split(" ")[0]
-                with growth_col2:
-                    assessment_date = st.date_input(
-                        "Estimate height as of",
-                        value=datetime.date.today(),
-                        key="tree_assessment_date"
-                    )
-                with growth_col3:
-                    growth_rate = st.number_input(
-                        "Growth rate (m/year)",
-                        min_value=0.0,
-                        value=float(TREE_GROWTH_DEFAULTS.get(growth_species_code, 0.5)),
-                        step=0.05,
-                        format="%.2f",
-                        key="tree_growth_rate",
-                        help="Default is the midpoint of the species growth-rate range already described in this app. Adjust for local conditions."
-                    )
+                growth_rate = 0.0
+                assessment_date = datetime.date.today()
+                growth_species_code = ""
+                if apply_growth:
+                    growth_col1, growth_col2, growth_col3 = st.columns(3)
+                    with growth_col1:
+                        growth_species_sel = st.selectbox(
+                            "Species for growth adjustment",
+                            species_choices,
+                            key="tree_growth_species"
+                        )
+                        growth_species_code = growth_species_sel.split(" ")[0]
+                    with growth_col2:
+                        assessment_date = st.date_input(
+                            "Estimate height as of",
+                            value=datetime.date.today(),
+                            key="tree_assessment_date"
+                        )
+                    with growth_col3:
+                        growth_rate = st.number_input(
+                            "Growth rate (m/year)",
+                            min_value=0.0,
+                            value=float(TREE_GROWTH_DEFAULTS.get(growth_species_code, 0.5)),
+                            step=0.05,
+                            format="%.2f",
+                            key="tree_growth_rate",
+                            help="Adjust this value for the species, age and local site conditions."
+                        )
 
-            if shadow_length_m > 0:
                 solar_match = find_solar_match_for_shadow(
                     image_date,
                     tree_latitude,
@@ -1430,19 +1657,23 @@ with col1:
                         years_growth = (assessment_date - image_date).days / 365.25
                         estimated_height += years_growth * growth_rate
 
-                    result_col1, result_col2, result_col3 = st.columns(3)
+                    result_col1, result_col2, result_col3, result_col4 = st.columns(4)
                     result_col1.metric("Solar elevation", f"{solar_elevation:.2f}°")
-                    result_col2.metric("Matched azimuth", f"{solar_match['azimuth']:.2f}°")
-                    result_col3.metric("Estimated tree height", f"{estimated_height:.1f} m")
+                    result_col2.metric("Matched sun azimuth", f"{solar_match['azimuth']:.2f}°")
+                    result_col3.metric("Matched time", solar_match["local_time"].strftime("%H:%M"))
+                    result_col4.metric("Estimated tree height", f"{estimated_height:.1f} m")
 
                     st.caption(
-                        f"Closest 15-minute solar-position match: {solar_match['difference']:.2f}° from the entered heading. "
+                        f"Closest 15-minute sun-position match is {solar_match['difference']:.2f}° from the measured shadow heading. "
                         f"Height at imagery date: {shadow_height:.1f} m."
                         + (f" Growth adjustment: +{years_growth * growth_rate:.1f} m." if apply_growth and years_growth > 0 else "")
                     )
 
                     if solar_match["difference"] > 5:
-                        st.warning("The closest solar azimuth is more than 5° from the measured heading. Recheck the heading, coordinates, or imagery date.")
+                        st.warning(
+                            "The closest solar azimuth is more than 5° from the measured line. "
+                            "Recheck that the line was drawn from shadow tip → tree base and that the imagery date is correct."
+                        )
 
                     if st.button("Use estimated height", key="use_shadow_tree_height"):
                         rounded_height = int(round(estimated_height))
@@ -1451,10 +1682,12 @@ with col1:
                         st.session_state.pending_tree_height = max(0, min(40, rounded_height))
                         st.rerun()
 
-            st.caption(
-                "Calculation: tree height = TAN(solar elevation) × shadow length. "
-                "Avoid using this method on strongly sloped ground or where the tree base/shadow tip cannot be identified reliably."
-            )
+                st.caption(
+                    "Calculation: tree height = TAN(solar elevation) × shadow length. "
+                    "Avoid this method on strongly sloped ground or where the tree base/shadow tip cannot be identified reliably."
+                )
+            elif tree_map_upload is not None and map_gdf is not None:
+                st.info("Draw a shadow line on the map to calculate the tree height.")
 
         else:
             dbh_col1, dbh_col2 = st.columns(2)
