@@ -928,6 +928,122 @@ if "pending_auto_disposition_fma" in st.session_state:
     st.session_state.last_auto_disposition_fma = auto_fma_value
     del st.session_state.pending_auto_disposition_fma
 
+# --- Tree-height estimator helpers ---
+# Shadow method follows the existing Google Earth workflow: measure from the shadow tip
+# to the tree base so the measured heading points toward the sun. The calculator then
+# finds the closest 15-minute solar azimuth for the selected location/date and uses
+# tree height = tan(solar elevation) * shadow length.
+def _solar_position_noaa(dt_utc, latitude, longitude):
+    """Approximate solar elevation and azimuth (degrees) for a UTC datetime."""
+    days_in_year = 366 if (dt_utc.year % 4 == 0 and (dt_utc.year % 100 != 0 or dt_utc.year % 400 == 0)) else 365
+    day_of_year = dt_utc.timetuple().tm_yday
+    hour = dt_utc.hour + dt_utc.minute / 60.0 + dt_utc.second / 3600.0
+
+    gamma = 2.0 * math.pi / days_in_year * (day_of_year - 1 + (hour - 12.0) / 24.0)
+    eqtime = 229.18 * (
+        0.000075
+        + 0.001868 * math.cos(gamma)
+        - 0.032077 * math.sin(gamma)
+        - 0.014615 * math.cos(2 * gamma)
+        - 0.040849 * math.sin(2 * gamma)
+    )
+    decl = (
+        0.006918
+        - 0.399912 * math.cos(gamma)
+        + 0.070257 * math.sin(gamma)
+        - 0.006758 * math.cos(2 * gamma)
+        + 0.000907 * math.sin(2 * gamma)
+        - 0.002697 * math.cos(3 * gamma)
+        + 0.00148 * math.sin(3 * gamma)
+    )
+
+    # UTC is used here (timezone = 0). Longitude is included in the solar-time offset.
+    time_offset = eqtime + 4.0 * longitude
+    true_solar_minutes = (hour * 60.0 + time_offset) % 1440.0
+    hour_angle = true_solar_minutes / 4.0 - 180.0
+    if hour_angle < -180.0:
+        hour_angle += 360.0
+
+    lat_rad = math.radians(latitude)
+    hour_angle_rad = math.radians(hour_angle)
+    cos_zenith = (
+        math.sin(lat_rad) * math.sin(decl)
+        + math.cos(lat_rad) * math.cos(decl) * math.cos(hour_angle_rad)
+    )
+    cos_zenith = max(-1.0, min(1.0, cos_zenith))
+    zenith_rad = math.acos(cos_zenith)
+    elevation = 90.0 - math.degrees(zenith_rad)
+
+    az_denom = math.cos(lat_rad) * math.sin(zenith_rad)
+    if abs(az_denom) > 1e-12:
+        az_cos = ((math.sin(lat_rad) * math.cos(zenith_rad)) - math.sin(decl)) / az_denom
+        az_cos = max(-1.0, min(1.0, az_cos))
+        azimuth = math.degrees(math.acos(az_cos))
+        if hour_angle > 0:
+            azimuth = (azimuth + 180.0) % 360.0
+        else:
+            azimuth = (540.0 - azimuth) % 360.0
+    else:
+        azimuth = 180.0 if latitude >= 0 else 0.0
+
+    return elevation, azimuth
+
+
+def _angle_difference_deg(a, b):
+    """Smallest circular difference between two headings in degrees."""
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def find_solar_match_for_shadow(image_date, latitude, longitude, shadow_heading, step_minutes=15):
+    """Find the daylight solar position whose azimuth best matches the measured heading."""
+    # Approximate civil offset from longitude so the selected calendar date covers the
+    # local daylight period. Exact timezone/DST is not needed for the height calculation.
+    approx_utc_offset = int(round(longitude / 15.0))
+    local_midnight = datetime.datetime.combine(image_date, datetime.time.min)
+
+    best = None
+    for minute in range(0, 24 * 60, step_minutes):
+        local_dt = local_midnight + datetime.timedelta(minutes=minute)
+        dt_utc = local_dt - datetime.timedelta(hours=approx_utc_offset)
+        elevation, azimuth = _solar_position_noaa(dt_utc, latitude, longitude)
+        if elevation <= 0:
+            continue
+
+        difference = _angle_difference_deg(azimuth, shadow_heading)
+        candidate = {
+            "local_time": local_dt.time(),
+            "elevation": elevation,
+            "azimuth": azimuth,
+            "difference": difference,
+        }
+        if best is None or difference < best["difference"]:
+            best = candidate
+
+    return best
+
+
+# Midpoints of the growth-rate ranges already described in the existing tree-height help text.
+TREE_GROWTH_DEFAULTS = {
+    "Sw": 0.45,
+    "Sb": 0.45,
+    "P": 0.75,
+    "Fb": 0.40,
+    "Fd": 0.40,
+    "Lt": 0.50,
+    "Aw": 0.75,
+    "Pb": 2.00,
+    "Bw": 1.00,
+}
+
+# Apply a tree-height estimate only when the user explicitly clicks the estimator button.
+# This happens before the existing Average Stand Tree Height slider is created.
+if "pending_tree_height" in st.session_state:
+    try:
+        st.session_state.avg_stand_height = int(st.session_state.pending_tree_height)
+    except Exception:
+        pass
+    del st.session_state.pending_tree_height
+
 
 # --- Page config ---
 st.set_page_config(layout="wide")
@@ -1198,6 +1314,214 @@ with col1:
         key="crown_density",
         help="Utilize recent satellite imagery to estimate crown density within the tree stand."
     )
+
+    # --- Tree Height Estimator (added without changing the existing TDA calculation) ---
+    with st.expander("Tree Height Estimator", expanded=False):
+        st.caption("Estimate height from imagery/shadows or enter survey-plan DBH information.")
+
+        tree_height_method = st.radio(
+            "Estimation method",
+            ["Shadow / imagery", "DBH / survey plan"],
+            horizontal=True,
+            key="tree_height_method"
+        )
+
+        if tree_height_method == "Shadow / imagery":
+            shadow_col1, shadow_col2 = st.columns(2)
+
+            with shadow_col1:
+                shadow_length_m = st.number_input(
+                    "Shadow length (m)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    format="%.2f",
+                    key="tree_shadow_length",
+                    help="Measure from the shadow tip to the base of the tree, down the centre of the shadow."
+                )
+                shadow_heading_deg = st.number_input(
+                    "Shadow heading: tip → tree base (°)",
+                    min_value=0.0,
+                    max_value=360.0,
+                    value=0.0,
+                    step=0.1,
+                    format="%.2f",
+                    key="tree_shadow_heading",
+                    help="Use the heading measured from the shadow tip toward the tree base. Measuring the opposite direction reverses the heading."
+                )
+                image_date = st.date_input(
+                    "Imagery date",
+                    value=datetime.date.today(),
+                    key="tree_image_date"
+                )
+
+            with shadow_col2:
+                tree_latitude = st.number_input(
+                    "Latitude",
+                    min_value=-90.0,
+                    max_value=90.0,
+                    value=54.000000,
+                    step=0.000001,
+                    format="%.6f",
+                    key="tree_latitude"
+                )
+                tree_longitude = st.number_input(
+                    "Longitude",
+                    min_value=-180.0,
+                    max_value=180.0,
+                    value=-115.000000,
+                    step=0.000001,
+                    format="%.6f",
+                    key="tree_longitude"
+                )
+                apply_growth = st.checkbox(
+                    "Adjust older imagery for growth",
+                    value=False,
+                    key="tree_apply_growth"
+                )
+
+            growth_rate = 0.0
+            assessment_date = datetime.date.today()
+            growth_species_code = ""
+            if apply_growth:
+                growth_col1, growth_col2, growth_col3 = st.columns(3)
+                with growth_col1:
+                    growth_species_sel = st.selectbox(
+                        "Species for growth adjustment",
+                        species_choices,
+                        key="tree_growth_species"
+                    )
+                    growth_species_code = growth_species_sel.split(" ")[0]
+                with growth_col2:
+                    assessment_date = st.date_input(
+                        "Estimate height as of",
+                        value=datetime.date.today(),
+                        key="tree_assessment_date"
+                    )
+                with growth_col3:
+                    growth_rate = st.number_input(
+                        "Growth rate (m/year)",
+                        min_value=0.0,
+                        value=float(TREE_GROWTH_DEFAULTS.get(growth_species_code, 0.5)),
+                        step=0.05,
+                        format="%.2f",
+                        key="tree_growth_rate",
+                        help="Default is the midpoint of the species growth-rate range already described in this app. Adjust for local conditions."
+                    )
+
+            if shadow_length_m > 0:
+                solar_match = find_solar_match_for_shadow(
+                    image_date,
+                    tree_latitude,
+                    tree_longitude,
+                    shadow_heading_deg,
+                    step_minutes=15
+                )
+
+                if solar_match is None:
+                    st.warning("No daylight solar position was found for that location/date.")
+                else:
+                    solar_elevation = solar_match["elevation"]
+                    shadow_height = math.tan(math.radians(solar_elevation)) * shadow_length_m
+                    estimated_height = shadow_height
+                    years_growth = 0.0
+
+                    if apply_growth and assessment_date > image_date:
+                        years_growth = (assessment_date - image_date).days / 365.25
+                        estimated_height += years_growth * growth_rate
+
+                    result_col1, result_col2, result_col3 = st.columns(3)
+                    result_col1.metric("Solar elevation", f"{solar_elevation:.2f}°")
+                    result_col2.metric("Matched azimuth", f"{solar_match['azimuth']:.2f}°")
+                    result_col3.metric("Estimated tree height", f"{estimated_height:.1f} m")
+
+                    st.caption(
+                        f"Closest 15-minute solar-position match: {solar_match['difference']:.2f}° from the entered heading. "
+                        f"Height at imagery date: {shadow_height:.1f} m."
+                        + (f" Growth adjustment: +{years_growth * growth_rate:.1f} m." if apply_growth and years_growth > 0 else "")
+                    )
+
+                    if solar_match["difference"] > 5:
+                        st.warning("The closest solar azimuth is more than 5° from the measured heading. Recheck the heading, coordinates, or imagery date.")
+
+                    if st.button("Use estimated height", key="use_shadow_tree_height"):
+                        rounded_height = int(round(estimated_height))
+                        if rounded_height > 40:
+                            st.warning("The existing Average Stand Tree Height slider is capped at 40 m, so 40 m will be entered.")
+                        st.session_state.pending_tree_height = max(0, min(40, rounded_height))
+                        st.rerun()
+
+            st.caption(
+                "Calculation: tree height = TAN(solar elevation) × shadow length. "
+                "Avoid using this method on strongly sloped ground or where the tree base/shadow tip cannot be identified reliably."
+            )
+
+        else:
+            dbh_col1, dbh_col2 = st.columns(2)
+            with dbh_col1:
+                dbh_species_sel = st.selectbox(
+                    "Tree species",
+                    species_choices,
+                    key="dbh_species"
+                )
+                dbh_cm = st.number_input(
+                    "DBH (cm)",
+                    min_value=0.0,
+                    value=0.0,
+                    step=0.1,
+                    format="%.1f",
+                    key="dbh_cm",
+                    help="Diameter at breast height (1.3 m above the point of germination)."
+                )
+
+            with dbh_col2:
+                plan_has_height = st.checkbox(
+                    "Survey plan already provides tree height",
+                    value=False,
+                    key="plan_has_height"
+                )
+                if plan_has_height:
+                    plan_height_m = st.number_input(
+                        "Survey-plan tree height (m)",
+                        min_value=0.0,
+                        value=0.0,
+                        step=0.1,
+                        format="%.1f",
+                        key="plan_height_m"
+                    )
+                else:
+                    plan_height_m = 0.0
+
+            dbh_estimated_height = None
+            if plan_has_height and plan_height_m > 0:
+                dbh_estimated_height = plan_height_m
+                st.metric("Tree height", f"{dbh_estimated_height:.1f} m")
+            elif not plan_has_height:
+                st.info(
+                    "DBH-to-height relationships vary by species, natural subregion, and site. "
+                    "Enter the applicable Richards-equation coefficients from the survey/FMA model rather than using guessed coefficients."
+                )
+                coef1, coef2, coef3 = st.columns(3)
+                with coef1:
+                    coef_a = st.number_input("Coefficient a", min_value=0.0, value=0.0, step=0.01, key="dbh_coef_a")
+                with coef2:
+                    coef_b = st.number_input("Coefficient b", min_value=0.0, value=0.0, step=0.001, format="%.4f", key="dbh_coef_b")
+                with coef3:
+                    coef_c = st.number_input("Coefficient c", min_value=0.0, value=0.0, step=0.01, key="dbh_coef_c")
+
+                st.caption("Richards form: Height (m) = 1.3 + a × (1 − EXP(−b × DBH_cm))^c")
+
+                if dbh_cm > 0 and coef_a > 0 and coef_b > 0 and coef_c > 0:
+                    dbh_estimated_height = 1.3 + coef_a * (1.0 - math.exp(-coef_b * dbh_cm)) ** coef_c
+                    st.metric("Estimated tree height", f"{dbh_estimated_height:.1f} m")
+
+            if dbh_estimated_height is not None and dbh_estimated_height > 0:
+                if st.button("Use this height", key="use_dbh_tree_height"):
+                    rounded_height = int(round(dbh_estimated_height))
+                    if rounded_height > 40:
+                        st.warning("The existing Average Stand Tree Height slider is capped at 40 m, so 40 m will be entered.")
+                    st.session_state.pending_tree_height = max(0, min(40, rounded_height))
+                    st.rerun()
 
     avg_stand_height = st.slider(
         "Average Stand Tree Height",
